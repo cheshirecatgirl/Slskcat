@@ -83,6 +83,11 @@ impl LiveBackend {
             self.disconnect(Disconnect::Requested, out);
         }
 
+        // Whatever assembled this config — a form, a settings file — may have
+        // left the download directory blank. Downloads must never be written
+        // to an empty path, so it is repaired before anything uses it.
+        let config = config.normalized();
+
         let settings = ClientSettings {
             username: config.credentials.username.clone(),
             password: config.credentials.password.clone(),
@@ -587,6 +592,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap as Map;
     use std::sync::mpsc;
+    use std::time::Duration;
 
     fn sink() -> (EventSink, mpsc::Receiver<Event>) {
         let (tx, rx) = mpsc::channel();
@@ -641,6 +647,28 @@ mod tests {
             rx.try_recv().unwrap(),
             Event::TransferUpdated { id, state: TransferState::Cancelled }
         );
+    }
+
+    #[test]
+    fn an_empty_download_directory_is_repaired() {
+        // Kept free of `connect`, which would dial the real Soulseek server
+        // and make this a slow, network-dependent test.
+        let blank = Config { download_dir: PathBuf::new(), ..Config::default() };
+        let fixed = blank.normalized();
+
+        assert!(
+            !fixed.download_dir.as_os_str().is_empty(),
+            "a blank download directory must be replaced with a real one"
+        );
+        assert_eq!(fixed.download_dir, crate::model::default_download_dir());
+    }
+
+    #[test]
+    fn zero_upload_slots_and_timeout_are_repaired() {
+        let odd = Config { upload_slots: 0, search_timeout: Duration::ZERO, ..Config::default() }
+            .normalized();
+        assert_eq!(odd.upload_slots, 1, "serving zero uploads would stall every peer");
+        assert!(!odd.search_timeout.is_zero(), "a zero search window finds nothing");
     }
 
     #[test]

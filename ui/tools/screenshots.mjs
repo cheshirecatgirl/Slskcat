@@ -37,8 +37,25 @@ const bridge = () => {
       }
       if (cmd === "plugin:event|unlisten") return null;
       if (cmd === "search") return 1;
+      if (cmd === "load_settings") return { ...window.__settings };
+      if (cmd === "save_settings" || cmd === "connect") {
+        window.__settings = { ...window.__settings, ...args.settings, keychainAvailable: true };
+        return { ...window.__settings };
+      }
       return null;
     },
+  };
+
+  // Stands in for what the settings file and credential store would hold.
+  window.__settings = {
+    username: "lark_listener",
+    password: "",
+    rememberPassword: false,
+    downloadDir: "/home/listener/Downloads",
+    sharedDirs: ["/home/listener/Music/FLAC", "/home/listener/Music/Rips"],
+    uploadSlots: 3,
+    searchTimeoutSecs: 12,
+    keychainAvailable: true,
   };
 
   // Push a core event into the app exactly as the Rust side would.
@@ -172,6 +189,11 @@ const run = async () => {
     });
     await page.waitForTimeout(500);
     await shot("5-rooms");
+
+    // 6. Settings, rendered from the persisted preferences
+    await page.click('button:has-text("Settings")');
+    await page.waitForTimeout(400);
+    await shot("6-settings");
 
     await context.close();
   }

@@ -16,14 +16,17 @@
 // handlers below cannot borrow them however little they consume.
 #![allow(clippy::needless_pass_by_value)]
 
+pub mod settings;
+
 use lark_core::command::SearchIds;
-use lark_core::model::{Config, SearchId, TransferId};
+use lark_core::model::{SearchId, TransferId};
 use lark_core::{Command, Commander, Engine, LiveBackend};
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::thread;
 
+use settings::Settings;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The single channel every core event is published on. The interface
@@ -80,9 +83,29 @@ fn start_core(app: &AppHandle) -> Commander {
 
 // --- commands: session ---
 
+/// Sign in, and persist the settings the session was started with.
+///
+/// Saving here rather than in the interface means the stored settings always
+/// describe a configuration that was actually used to connect.
 #[tauri::command]
-fn connect(app: State<'_, App>, config: Config) -> Result<(), String> {
-    app.send(Command::Connect(Box::new(config)))
+fn connect(
+    app: State<'_, App>,
+    handle: AppHandle,
+    settings: Settings,
+) -> Result<Settings, String> {
+    let config = settings.to_config();
+    app.send(Command::Connect(Box::new(config)))?;
+    settings::save(&handle, &settings)
+}
+
+#[tauri::command]
+fn load_settings(handle: AppHandle) -> Result<Settings, String> {
+    settings::load(&handle)
+}
+
+#[tauri::command]
+fn save_settings(handle: AppHandle, settings: Settings) -> Result<Settings, String> {
+    settings::save(&handle, &settings)
 }
 
 #[tauri::command]
@@ -203,6 +226,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,
+            load_settings,
+            save_settings,
             search,
             cancel_search,
             download,

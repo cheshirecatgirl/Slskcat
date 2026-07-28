@@ -46,6 +46,14 @@ Deliberately thin. Each user action is a `#[tauri::command]` forwarding a
 `Command`; one thread owns the `Engine` and republishes every `Event` to the
 WebView on a single channel. It holds no protocol knowledge of its own.
 
+`settings.rs` is the exception, because persistence is an application concern
+rather than a protocol one. Preferences go to `settings.json` in the platform
+config directory; the **password goes to the OS credential store** — Keychain,
+Credential Manager, or the D-Bus Secret Service — and never to disk in the
+clear. A credential store that cannot be reached (a headless Linux box with no
+session keyring) degrades to "password not remembered" and says so, rather
+than failing to start.
+
 ### `ui`
 
 Svelte 5 with runes. `lib/core.ts` is the only file that imports Tauri;
@@ -111,7 +119,7 @@ the Tauri system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`,
 ```bash
 pnpm --dir ui install
 
-cargo test                        # 27 unit tests, no network needed
+cargo test                        # 34 unit tests, no network needed
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 
@@ -133,10 +141,22 @@ pnpm dlx playwright@latest        # once
 node tools/screenshots.mjs ../docs
 ```
 
-## Known limitations
+## Not done yet
 
-- **Not yet tested against the live network.** Login, transfers and browsing
-  are unverified end to end.
+The architecture, the core and the interface are built and verified. These are
+the known gaps:
+
+- **Never tested against the live network.** Login, transfers and browsing are
+  unproven end to end; every test here is offline.
+- **Private messages** arrive and are stored, but nothing renders them and
+  there is no way to send one.
+- **Uploads have no screen.** You cannot see who is downloading from you, or
+  your queue.
+- **Wishlist** is supported by the protocol library and not wired up.
+- `requestUserInfo` and `cancelSearch` are in the bridge and called by nothing.
+- No CI, no packaging run (`tauri build`), no Windows `.ico`.
+
+## Known limitations
 - **Linux rendering.** Tauri uses WebKitGTK there, which is the weakest of the
   three platform WebViews; occasional visual artefacts are possible. Windows
   and macOS use Chromium-based and WebKit engines respectively and are solid.

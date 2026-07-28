@@ -22,3 +22,9 @@ lark-core = { path = "../lark-core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# The password belongs in the OS credential store, never in the settings file.
+# The default `v1` feature covers Keychain, Credential Manager and the
+# D-Bus Secret Service, so no per-platform wiring or libsecret headers.
+keyring = "4"

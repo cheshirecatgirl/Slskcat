@@ -1,12 +1,27 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
-  import type { Config } from "../lib/types";
 
   let username = $state("");
   let password = $state("");
+  let remember = $state(false);
+  /** True once the stored settings have been copied into the fields. */
+  let prefilled = $state(false);
 
-  const canSubmit = $derived(username.trim().length > 0 && password.length > 0 && !app.connecting);
+  // Settings load asynchronously, so the form fills itself in when they
+  // arrive rather than rendering blank and staying that way.
+  $effect(() => {
+    const stored = app.settings;
+    if (!stored || prefilled) return;
+    username = stored.username;
+    password = stored.password;
+    remember = stored.rememberPassword;
+    prefilled = true;
+  });
+
+  const canSubmit = $derived(
+    username.trim().length > 0 && password.length > 0 && !app.connecting,
+  );
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -15,18 +30,28 @@
     app.connecting = true;
     app.loginError = null;
 
-    // downloadDir and sharedDirs are left to the core's defaults here; both
-    // are editable in Settings once there is a session to apply them to.
-    const config: Config = {
-      credentials: { username: username.trim(), password },
-      downloadDir: "",
-      sharedDirs: [],
-      uploadSlots: 2,
-      searchTimeout: 12,
-    };
-
     try {
-      await core.connect(config);
+      // The backend persists what it was given, so the stored settings always
+      // describe a configuration that was actually used to sign in.
+      const saved = await core.connect({
+        ...(app.settings ?? {
+          downloadDir: "",
+          sharedDirs: [],
+          uploadSlots: 2,
+          searchTimeoutSecs: 12,
+          keychainAvailable: true,
+        }),
+        username: username.trim(),
+        password,
+        rememberPassword: remember,
+      });
+      app.settings = saved;
+
+      if (remember && !saved.keychainAvailable) {
+        app.notify(
+          "Signed in, but your password could not be saved — this system has no available credential store.",
+        );
+      }
     } catch (error) {
       app.connecting = false;
       app.loginError = String(error);
@@ -66,13 +91,26 @@
       />
     </label>
 
+    <label class="check">
+      <input type="checkbox" bind:checked={remember} disabled={app.connecting} />
+      <span>Remember my password</span>
+    </label>
+
     {#if app.loginError}
       <p class="error" role="alert">{app.loginError}</p>
+    {/if}
+    {#if app.settingsError}
+      <p class="error" role="alert">{app.settingsError}</p>
     {/if}
 
     <button class="btn primary" type="submit" disabled={!canSubmit}>
       {app.connecting ? "Connecting…" : "Sign in"}
     </button>
+
+    <p class="note">
+      Saved to your system's credential store — Keychain, Credential Manager, or
+      the desktop secret service — never to a file.
+    </p>
   </form>
 </div>
 
@@ -133,6 +171,21 @@
     color: var(--text-2);
   }
 
+  .check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin-top: -3px;
+    cursor: pointer;
+  }
+  .check input {
+    accent-color: var(--accent);
+  }
+  .check span {
+    font-weight: 400;
+    color: var(--text-2);
+  }
+
   .error {
     padding: 8px 11px;
     border-radius: var(--radius-sm);
@@ -144,5 +197,11 @@
   button {
     margin-top: 3px;
     padding: 9px;
+  }
+
+  .note {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-3);
   }
 </style>

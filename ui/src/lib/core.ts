@@ -9,7 +9,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { Config, CoreEvent, SearchId } from "./types";
+import type { CoreEvent, SearchId, Settings } from "./types";
 
 /** Must match `lark_app::EVENT_CHANNEL`. */
 const EVENT_CHANNEL = "lark://event";
@@ -20,7 +20,10 @@ export function onEvent(handler: (event: CoreEvent) => void): Promise<UnlistenFn
 }
 
 export const core = {
-  connect: (config: Config) => invoke<void>("connect", { config }),
+  /** Signs in and persists the settings the session was started with. */
+  connect: (settings: Settings) => invoke<Settings>("connect", { settings }),
+  loadSettings: () => invoke<Settings>("load_settings"),
+  saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
   disconnect: () => invoke<void>("disconnect"),
 
   /** Starts a search and resolves with the id its hits will carry. */

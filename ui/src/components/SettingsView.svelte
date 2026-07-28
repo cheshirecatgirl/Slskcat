@@ -2,91 +2,148 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
+  import type { Settings } from "../lib/types";
 
-  let shared = $state<string[]>([]);
-  let slots = $state(2);
+  const settings = $derived(app.settings);
 
-  async function addFolder() {
+  /**
+   * Apply a change: persist it, and push the parts the live session cares
+   * about to the core. Persisting first means a crash before the next launch
+   * still leaves the preference saved.
+   */
+  async function update(change: Partial<Settings>) {
+    if (!settings) return;
+    const next = { ...settings, ...change };
+    try {
+      app.settings = await core.saveSettings(next);
+    } catch (error) {
+      app.notify(`Could not save your settings: ${error}`, "danger");
+      return;
+    }
+
+    try {
+      if (change.sharedDirs) await core.setSharedDirs(next.sharedDirs);
+      if (change.uploadSlots !== undefined) await core.setUploadSlots(next.uploadSlots);
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
+  async function addFolders() {
     const picked = await open({ directory: true, multiple: true });
-    if (!picked) return;
+    if (!picked || !settings) return;
     const added = Array.isArray(picked) ? picked : [picked];
-    // A folder shared twice would be uploaded twice; keep the set distinct.
-    shared = [...new Set([...shared, ...added])];
-    await push();
+    // A folder shared twice would be offered twice; keep the set distinct.
+    await update({ sharedDirs: [...new Set([...settings.sharedDirs, ...added])] });
   }
 
   async function removeFolder(path: string) {
-    shared = shared.filter((p) => p !== path);
-    await push();
+    if (!settings) return;
+    await update({ sharedDirs: settings.sharedDirs.filter((p) => p !== path) });
   }
 
-  async function push() {
-    try {
-      await core.setSharedDirs($state.snapshot(shared));
-    } catch (error) {
-      app.notify(String(error), "danger");
-    }
+  async function chooseDownloadDir() {
+    const picked = await open({ directory: true, multiple: false });
+    if (typeof picked === "string") await update({ downloadDir: picked });
   }
 
-  async function applySlots() {
-    try {
-      await core.setUploadSlots(slots);
-    } catch (error) {
-      app.notify(String(error), "danger");
-    }
+  /**
+   * Slot changes are saved when the drag ends rather than on every step, so a
+   * sweep across the range writes once instead of ten times.
+   */
+  function onSlots(event: Event) {
+    const value = Number((event.currentTarget as HTMLInputElement).value);
+    void update({ uploadSlots: value });
   }
 </script>
 
 <div class="view">
   <header><h2>Settings</h2></header>
 
-  <div class="body">
-    <section>
-      <h3>Shared folders</h3>
-      <p class="hint">
-        Files in these folders are offered to other users. Sharing nothing is
-        allowed, but many users will not queue you if you share nothing.
-      </p>
+  {#if !settings}
+    <div class="empty">
+      <h3>Loading your settings…</h3>
+    </div>
+  {:else}
+    <div class="body">
+      <section>
+        <h3>Download folder</h3>
+        <p class="hint">Where finished files are saved.</p>
+        <div class="row">
+          <span class="path selectable" title={settings.downloadDir}>
+            {settings.downloadDir}
+          </span>
+          <button class="btn small" onclick={chooseDownloadDir}>Change…</button>
+        </div>
+      </section>
 
-      {#if shared.length > 0}
-        <ul>
-          {#each shared as path (path)}
-            <li>
-              <span class="path selectable" title={path}>{path}</span>
-              <button class="btn quiet small" onclick={() => removeFolder(path)}>Remove</button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-
-      <button class="btn" onclick={addFolder}>Add folder…</button>
-
-      {#if app.shares}
-        <p class="stat num">
-          Currently sharing {app.shares.files.toLocaleString()} files across
-          {app.shares.directories.toLocaleString()} folders.
+      <section>
+        <h3>Shared folders</h3>
+        <p class="hint">
+          Files in these folders are offered to other users. Sharing nothing is
+          allowed, but many users will not queue you if you share nothing.
         </p>
-      {/if}
-    </section>
 
-    <section>
-      <h3>Upload slots</h3>
-      <p class="hint">
-        How many people can download from you at once. Everyone else waits in
-        your queue.
-      </p>
-      <div class="slots">
-        <input type="range" min="1" max="10" bind:value={slots} onchange={applySlots} />
-        <span class="num value">{slots}</span>
-      </div>
-    </section>
+        {#if settings.sharedDirs.length > 0}
+          <ul>
+            {#each settings.sharedDirs as path (path)}
+              <li>
+                <span class="path selectable" title={path}>{path}</span>
+                <button class="btn quiet small" onclick={() => removeFolder(path)}>Remove</button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
 
-    <section>
-      <h3>Account</h3>
-      <p class="hint">Signed in as <strong>{app.username}</strong>.</p>
-      <button class="btn" onclick={() => core.disconnect()}>Sign out</button>
-    </section>
-  </div>
+        <button class="btn" onclick={addFolders}>Add folder…</button>
+
+        {#if app.shares}
+          <p class="stat num">
+            Currently sharing {app.shares.files.toLocaleString()} files across
+            {app.shares.directories.toLocaleString()} folders.
+          </p>
+        {/if}
+      </section>
+
+      <section>
+        <h3>Upload slots</h3>
+        <p class="hint">
+          How many people can download from you at once. Everyone else waits in
+          your queue.
+        </p>
+        <div class="slots">
+          <input
+            type="range"
+            min="1"
+            max="10"
+            value={settings.uploadSlots}
+            onchange={onSlots}
+          />
+          <span class="num value">{settings.uploadSlots}</span>
+        </div>
+      </section>
+
+      <section>
+        <h3>Account</h3>
+        <p class="hint">
+          Signed in as <strong>{app.username}</strong>.
+          {#if settings.rememberPassword}
+            Your password is saved in this system's credential store.
+          {:else}
+            Your password is not saved.
+          {/if}
+        </p>
+        <div class="row">
+          {#if settings.rememberPassword}
+            <button class="btn" onclick={() => update({ rememberPassword: false, password: "" })}>
+              Forget my password
+            </button>
+          {/if}
+          <button class="btn" onclick={() => core.disconnect()}>Sign out</button>
+        </div>
+      </section>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -131,6 +188,12 @@
   }
   .hint strong {
     color: var(--text-2);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   ul {

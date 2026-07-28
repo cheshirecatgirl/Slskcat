@@ -260,9 +260,33 @@ impl Default for Config {
     }
 }
 
+impl Config {
+    /// Replace anything unusable with a working default.
+    ///
+    /// An empty download directory is the case that matters: it reaches the
+    /// library as `""`, which is not a location, and every transfer would be
+    /// written somewhere unintended. Callers assembling a config from a form
+    /// or a settings file cannot be relied on to have filled it in, so the
+    /// core refuses to trust it.
+    #[must_use]
+    pub fn normalized(mut self) -> Self {
+        if self.download_dir.as_os_str().is_empty() {
+            self.download_dir = default_download_dir();
+        }
+        if self.upload_slots == 0 {
+            self.upload_slots = 1;
+        }
+        if self.search_timeout.is_zero() {
+            self.search_timeout = Duration::from_secs(12);
+        }
+        self
+    }
+}
+
 /// `$HOME/Downloads` where a home directory is known, else the working
 /// directory, so the core never has to unwrap a missing path.
-fn default_download_dir() -> PathBuf {
+#[must_use]
+pub fn default_download_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .map_or_else(|| PathBuf::from("."), |home| home.join("Downloads"))

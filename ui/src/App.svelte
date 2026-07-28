@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { onEvent } from "./lib/core";
+  import { core, onEvent } from "./lib/core";
   import { app } from "./lib/state.svelte";
   import type { Section } from "./lib/nav";
   import Sidebar from "./components/Sidebar.svelte";
@@ -17,6 +17,17 @@
   let palette = $state(false);
 
   onMount(() => {
+    // Preferences first: the sign-in form and the settings screen both render
+    // from them, and a failed load must be visible rather than silently
+    // resetting what the user configured.
+    core
+      .loadSettings()
+      .then((loaded) => (app.settings = loaded))
+      .catch((error) => {
+        app.settingsError = String(error);
+        app.notify(`Could not load your settings: ${error}`, "danger");
+      });
+
     // The subscription resolves asynchronously; unsubscribing has to wait for
     // it, so the cleanup awaits the same promise rather than racing it.
     const subscription = onEvent((event) => app.apply(event));
