@@ -1,0 +1,33 @@
+//! The engine behind Lark, a Soulseek client.
+//!
+//! The application talks to this crate in exactly two currencies:
+//! [`Command`] going in and [`Event`] coming out. Everything network-facing
+//! happens on worker threads owned by [`Engine`], so a UI can drain events
+//! once per frame and never block.
+//!
+//! ```no_run
+//! use lark_core::{Command, Engine, LiveBackend, model::Config};
+//!
+//! let engine = Engine::spawn(LiveBackend::new());
+//! engine.send(Command::Connect(Box::new(Config::default())));
+//!
+//! for event in engine.drain() {
+//!     println!("{event:?}");
+//! }
+//! ```
+//!
+//! The [`Backend`] trait is the seam: [`LiveBackend`] speaks the real
+//! protocol, and anything else implementing the trait can stand in for it.
+
+pub mod backend;
+pub mod command;
+pub mod engine;
+pub mod event;
+pub mod live;
+pub mod model;
+
+pub use backend::{Backend, EventSink};
+pub use command::{Command, SearchIds};
+pub use engine::Engine;
+pub use event::{Disconnect, Event};
+pub use live::LiveBackend;
