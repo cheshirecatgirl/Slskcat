@@ -91,14 +91,17 @@ process** with IPC. That directly contradicts the "lightweight" requirement.
 
 ## 2. App shell
 
-**Hard constraint: native software, not web-based.** This rules out Electron
-outright, and also rules out Tauri — although a Tauri app is a genuinely
-installed native binary, it still renders its UI in an OS WebView with
-HTML/CSS, which is not what "software based, not web based" asks for. Both are
-recorded below only to document why they were rejected.
+**Constraint: native software, not a web app.** This rules out Electron
+outright. It was initially read as also ruling out Tauri, on the grounds that
+Tauri renders its UI in an OS WebView — but that reading was too strict and has
+been revised; see [§3](#3-revisiting-tauri) for the reasoning and the final
+decision. A Tauri app is an installed native binary with no browser, no server
+and no localhost URL, which is what "software, not web based" was actually
+asking for.
 
-That leaves true native-widget toolkits. Since the viable protocol library is
-Rust (see §1), staying in Rust keeps the core in-process with zero IPC.
+The toolkits below are still the right field to compare. Since the viable
+protocol library is Rust (see §1), staying in Rust keeps the core in-process
+with zero IPC either way.
 
 | Option | Version | API stability | Look/feel ceiling | License | Verdict |
 |---|---|---|---|---|---|
@@ -109,8 +112,8 @@ Rust (see §1), staying in Rust keeps the core in-process with zero IPC.
 | Xilem | 0.4.0 | experimental | unproven | Apache | not production-ready |
 | Avalonia (.NET) | — | stable | good, more effort | MIT | needs .NET runtime + IPC to Rust |
 | Qt / GTK | — | stable | dated unless heavily themed | LGPL/GPL | poor UX-per-effort, C++/C binding tax |
-| ~~Tauri v2~~ | 2.11.5 | stable | full CSS | MIT | **rejected: webview UI** |
-| ~~Electron~~ | — | stable | full CSS | MIT | **rejected: webview + 80–200 MB** |
+| **Tauri v2** | 2.11.5 | stable | full CSS | MIT | **chosen — see §3** |
+| ~~Electron~~ | — | stable | full CSS | MIT | **rejected: 80–200 MB, bundles Chromium** |
 
 ### Iced vs Slint
 
@@ -148,41 +151,92 @@ being a deliberate, scheduled task rather than a surprise.
 
 ---
 
-## Recommendation
+---
 
-**Iced 0.14 + an in-process Rust core built on a pinned, wrapped
-`soulseek-rs-lib`. One language, one process, one native binary.**
+## 3. Revisiting Tauri
 
-- Protocol library and UI toolkit are both Rust — no sidecar, no IPC, no second
-  runtime to ship.
-- Native rendering, no webview, no bundled browser engine.
-- Single self-contained executable; low memory footprint.
-- Fully custom styling, so the "modern and beautiful" requirement is a design
-  problem rather than a toolkit limitation.
+The first pass rejected Tauri for rendering its UI in a WebView. On review that
+rejection did not hold up, for two reasons.
 
-Architecture: the Soulseek client runs on its own thread(s); an Iced
-`Subscription` bridges its event channel into the UI message loop. Incremental
-search results come from kicking off `search_with_cancel` on a worker and
-polling `get_search_results`, emitting deltas as messages.
+**Tauri is native software by any practical definition.** It ships as an
+installed binary — `.exe`, `.app`, `.deb`. There is no browser to open, no
+server to run, no URL to visit. The web technology is a rendering detail
+*inside* the window, not a deployment model. The thing "not web based" was
+meant to exclude is an app like slskd, which you reach at `localhost:5030` in
+Chrome. Tauri is not that.
+
+**The footprint argument was wrong.** The first pass implied "lightweight"
+favoured Iced. It does not. Tauri installs at roughly 600 KB–10 MB with
+20–100 MB idle RAM, which is the same envelope as an Iced binary. Footprint
+does not meaningfully separate them and should not have been used to decide.
+
+What Tauri genuinely wins on is the thing that was asked for first: the
+interface. Real CSS, real animation, grid and flexbox, instant hot-reload
+iteration, and an ecosystem an order of magnitude larger than Iced's
+(23.4M crate downloads against 2.4M). Polished shipping examples — Jan, Cap,
+Spacedrive, Hoppscotch — show the ceiling is high.
+
+### The real trade-off: Linux
+
+Tauri uses whatever WebView the OS provides:
+
+| Platform | Engine | Assessment |
+|---|---|---|
+| Windows | WebView2 (Chromium) | solid |
+| macOS | WKWebView | solid |
+| Linux | WebKitGTK | **the weak link** |
+
+WebKitGTK is where the reported problems are, and they are precisely visual
+ones: [CSS animations blurring the rest of the app and `contenteditable`
+quirks](https://github.com/tauri-apps/tauri/discussions/9088), NVIDIA DMABUF
+renderer failures, and [maintainers and users reporting it degrading with
+successive releases](https://github.com/orgs/tauri-apps/discussions/8524).
+Tauri ships a dedicated [Linux Graphics Issues](https://v2.tauri.app/develop/debug/linux-graphics/)
+page, which is itself a signal about frequency.
+
+Iced avoids this entirely by rendering everything itself, so it is
+pixel-identical on all three platforms — at the cost of more effort to reach
+the same visual polish, and a 0.x API that breaks between releases.
+
+## Decision
+
+**Tauri v2 + the existing Rust core, with a Svelte frontend.**
+
+With all three platforms weighted equally, Tauri gives a better interface on
+two of them and an occasionally-imperfect one on the third, against Iced's
+consistent-but-harder-won interface on all three. Since interface quality is
+the primary requirement, that trade favours Tauri. The accepted cost is
+explicit: **Linux users may see occasional rendering artefacts**, and Linux
+needs testing on real hardware before release.
+
+Architecture is unchanged by this decision, which is the point of having built
+the core behind a trait:
+
+- `lark-core` stays exactly as it is — a plain Rust crate, `Command` in and
+  `Event` out.
+- Tauri's backend *is* Rust, so the core is used in-process with no sidecar and
+  no serialisation boundary to the protocol library.
+- UI commands map to `#[tauri::command]`; the core's event stream is forwarded
+  to the WebView over Tauri's event channel.
 
 ### Fallbacks
 
-- **If `soulseek-rs-lib` proves too unstable:** re-point the `core` boundary at
+- **If WebKitGTK proves unacceptable on Linux:** the view layer is replaceable
+  with Iced 0.14 without touching `lark-core`. That is why the core was built
+  first and kept free of UI concerns.
+- **If `soulseek-rs-lib` proves too unstable:** re-point the `Backend` seam at
   an **slskd sidecar** over its HTTP API — the most battle-tested protocol
-  stack — in exchange for the .NET runtime and a second process. Keeping `core`
-  trait-shaped from day one makes this a contained change, not a rewrite.
-- **If Iced's 0.x churn or styling effort becomes the bottleneck:** Slint 1.17
-  is the drop-in-scope alternative for the view layer, since the core is
-  deliberately decoupled from it.
+  stack — in exchange for the .NET runtime and a second process.
 
 ---
 
 ## Build environment note
 
-This container has Rust 1.94.1 and Cargo 1.94.1, which is all the chosen stack
-requires. It is a headless Linux container with no display server, so the GUI
-cannot be *launched* here — the core and the UI code compile and unit-test
-fine, but visual verification has to happen on a real desktop.
+This container has Rust 1.94.1, Node 22.22.2 and pnpm 10.33, and
+`libwebkit2gtk-4.1-dev` 2.52.3 was installed so the Tauri backend compiles
+here. It is headless with no display server, so the app cannot be *launched* —
+everything compiles and unit-tests, but visual verification has to happen on a
+real desktop.
 
 ---
 
