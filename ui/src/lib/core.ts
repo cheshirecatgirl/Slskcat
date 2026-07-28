@@ -11,8 +11,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { CoreEvent, SearchId, Settings } from "./types";
 
-/** Must match `lark_app::EVENT_CHANNEL`. */
-const EVENT_CHANNEL = "lark://event";
+/** Must match `slskcat_app::EVENT_CHANNEL`. */
+const EVENT_CHANNEL = "slskcat://event";
 
 /** Subscribe to core events. Resolves to an unsubscribe function. */
 export function onEvent(handler: (event: CoreEvent) => void): Promise<UnlistenFn> {

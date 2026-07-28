@@ -17,7 +17,7 @@
     try {
       app.settings = await core.saveSettings(next);
     } catch (error) {
-      app.notify(`Could not save your settings: ${error}`, "danger");
+      app.notify(`Could not save settings: ${error}`, "danger");
       return;
     }
 
@@ -62,7 +62,7 @@
 
   {#if !settings}
     <div class="empty">
-      <h3>Loading your settings…</h3>
+      <h3>Loading settings…</h3>
     </div>
   {:else}
     <div class="body">
@@ -79,10 +79,7 @@
 
       <section>
         <h3>Shared folders</h3>
-        <p class="hint">
-          Files in these folders are offered to other users. Sharing nothing is
-          allowed, but many users will not queue you if you share nothing.
-        </p>
+        <p class="hint">Offered to other users.</p>
 
         {#if settings.sharedDirs.length > 0}
           <ul>
@@ -99,7 +96,7 @@
 
         {#if app.shares}
           <p class="stat num">
-            Currently sharing {app.shares.files.toLocaleString()} files across
+            Sharing {app.shares.files.toLocaleString()} files in
             {app.shares.directories.toLocaleString()} folders.
           </p>
         {/if}
@@ -107,10 +104,7 @@
 
       <section>
         <h3>Upload slots</h3>
-        <p class="hint">
-          How many people can download from you at once. Everyone else waits in
-          your queue.
-        </p>
+        <p class="hint">Concurrent uploads. Others wait in the queue.</p>
         <div class="slots">
           <input
             type="range"
@@ -127,16 +121,14 @@
         <h3>Account</h3>
         <p class="hint">
           Signed in as <strong>{app.username}</strong>.
-          {#if settings.rememberPassword}
-            Your password is saved in this system's credential store.
-          {:else}
-            Your password is not saved.
-          {/if}
+          {settings.rememberPassword
+            ? "Password stored in the system keychain."
+            : "Password not stored."}
         </p>
         <div class="row">
           {#if settings.rememberPassword}
             <button class="btn" onclick={() => update({ rememberPassword: false, password: "" })}>
-              Forget my password
+              Forget password
             </button>
           {/if}
           <button class="btn" onclick={() => core.disconnect()}>Sign out</button>

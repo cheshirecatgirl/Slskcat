@@ -172,7 +172,7 @@ impl LiveBackend {
         let cancel = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
         let worker = thread::Builder::new()
-            .name("lark-search".into())
+            .name("slskcat-search".into())
             .spawn({
                 let (client, query) = (Arc::clone(&client), query.clone());
                 let (cancel, done) = (Arc::clone(&cancel), Arc::clone(&done));
@@ -352,7 +352,7 @@ impl LiveBackend {
         if let Some(client) = self.client(out)
             && let Err(error) = client.set_shared_directories(paths)
         {
-            out.warn(format!("Could not update your shares: {error}"));
+            out.warn(format!("Could not update shares: {error}"));
         }
     }
 

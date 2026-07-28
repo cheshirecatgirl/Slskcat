@@ -48,9 +48,7 @@
       app.settings = saved;
 
       if (remember && !saved.keychainAvailable) {
-        app.notify(
-          "Signed in, but your password could not be saved — this system has no available credential store.",
-        );
+        app.notify("Signed in. Password not saved: no keychain available.");
       }
     } catch (error) {
       app.connecting = false;
@@ -62,11 +60,7 @@
 <div class="wrap">
   <form onsubmit={submit}>
     <div class="mark" aria-hidden="true"></div>
-    <h1>Sign in to Soulseek</h1>
-    <p class="sub">
-      Lark uses your existing Soulseek account. A new username is registered
-      automatically the first time you use it.
-    </p>
+    <h1>Sign in</h1>
 
     <label>
       <span>Username</span>
@@ -93,8 +87,9 @@
 
     <label class="check">
       <input type="checkbox" bind:checked={remember} disabled={app.connecting} />
-      <span>Remember my password</span>
+      <span>Remember password</span>
     </label>
+    <p class="note">Stored in the system keychain, not on disk.</p>
 
     {#if app.loginError}
       <p class="error" role="alert">{app.loginError}</p>
@@ -106,11 +101,6 @@
     <button class="btn primary" type="submit" disabled={!canSubmit}>
       {app.connecting ? "Connecting…" : "Sign in"}
     </button>
-
-    <p class="note">
-      Saved to your system's credential store — Keychain, Credential Manager, or
-      the desktop secret service — never to a file.
-    </p>
   </form>
 </div>
 
@@ -147,17 +137,10 @@
 
   h1 {
     margin-top: 4px;
+    margin-bottom: 3px;
     font-size: 19px;
     font-weight: 600;
     letter-spacing: -0.015em;
-  }
-
-  .sub {
-    margin-top: -6px;
-    margin-bottom: 4px;
-    color: var(--text-3);
-    font-size: 12.5px;
-    line-height: 1.55;
   }
 
   label {
@@ -200,8 +183,9 @@
   }
 
   .note {
+    margin-top: -8px;
+    padding-left: 21px;
     font-size: 11.5px;
-    line-height: 1.5;
     color: var(--text-3);
   }
 </style>

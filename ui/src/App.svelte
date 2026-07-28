@@ -25,7 +25,7 @@
       .then((loaded) => (app.settings = loaded))
       .catch((error) => {
         app.settingsError = String(error);
-        app.notify(`Could not load your settings: ${error}`, "danger");
+        app.notify(`Could not load settings: ${error}`, "danger");
       });
 
     // The subscription resolves asynchronously; unsubscribing has to wait for

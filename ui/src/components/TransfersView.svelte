@@ -98,7 +98,6 @@
   {#if list.length === 0}
     <div class="empty">
       <h3>No transfers</h3>
-      <p>Downloads you start from search results appear here.</p>
     </div>
   {:else}
     <div class="body">

@@ -1,6 +1,6 @@
 [package]
-name = "lark-core"
-description = "Protocol-agnostic core for the Lark Soulseek client"
+name = "slskcat-core"
+description = "Protocol-agnostic core for the slsk.cat Soulseek client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

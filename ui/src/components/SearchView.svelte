@@ -152,8 +152,7 @@
 
   {#if !search}
     <div class="empty">
-      <h3>Nothing searched yet</h3>
-      <p>Look for an artist, an album, or a filename. Results stream in as peers answer.</p>
+      <h3>No search yet</h3>
     </div>
   {:else}
     <div class="toolbar">
@@ -188,11 +187,6 @@
       {#if rows.length === 0}
         <div class="empty">
           <h3>{search.running ? "Waiting for peers" : "No matches"}</h3>
-          <p>
-            {search.running
-              ? "Results appear here as they arrive."
-              : "Try relaxing the filters, or search for something broader."}
-          </p>
         </div>
       {:else}
         <!-- A spacer of the full height gives the scrollbar honest proportions

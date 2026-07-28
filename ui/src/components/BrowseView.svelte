@@ -83,17 +83,14 @@
   {#if pending}
     <div class="empty">
       <h3>Waiting for {who}</h3>
-      <p>Peers answer browse requests at their own pace, and some never do.</p>
     </div>
   {:else if !app.browseResult}
     <div class="empty">
-      <h3>Browse someone's collection</h3>
-      <p>Enter a username to see everything they share, folder by folder.</p>
+      <h3>No user browsed</h3>
     </div>
   {:else if directories.length === 0}
     <div class="empty">
       <h3>Nothing shared</h3>
-      <p>{app.browsing} is not sharing any files.</p>
     </div>
   {:else}
     <div class="body">

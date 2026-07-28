@@ -1,4 +1,4 @@
-//! The engine behind Lark, a Soulseek client.
+//! The engine behind slsk.cat, a Soulseek client.
 //!
 //! The application talks to this crate in exactly two currencies:
 //! [`Command`] going in and [`Event`] coming out. Everything network-facing
@@ -6,7 +6,7 @@
 //! once per frame and never block.
 //!
 //! ```no_run
-//! use lark_core::{Command, Engine, LiveBackend, model::Config};
+//! use slskcat_core::{Command, Engine, LiveBackend, model::Config};
 //!
 //! let engine = Engine::spawn(LiveBackend::new());
 //! engine.send(Command::Connect(Box::new(Config::default())));

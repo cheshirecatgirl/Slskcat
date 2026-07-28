@@ -1,4 +1,4 @@
-//! The desktop application: a Tauri shell around [`lark_core`].
+//! The desktop application: a Tauri shell around [`slskcat_core`].
 //!
 //! This layer is deliberately thin. It owns no protocol knowledge and no
 //! application state beyond what is needed to route messages:
@@ -18,9 +18,9 @@
 
 pub mod settings;
 
-use lark_core::command::SearchIds;
-use lark_core::model::{SearchId, TransferId};
-use lark_core::{Command, Commander, Engine, LiveBackend};
+use slskcat_core::command::SearchIds;
+use slskcat_core::model::{SearchId, TransferId};
+use slskcat_core::{Command, Commander, Engine, LiveBackend};
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -31,7 +31,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The single channel every core event is published on. The interface
 /// subscribes once and switches on the event's `type` field.
-pub const EVENT_CHANNEL: &str = "lark://event";
+pub const EVENT_CHANNEL: &str = "slskcat://event";
 
 /// What the command handlers share.
 struct App {
@@ -50,7 +50,7 @@ impl App {
         if self.core.send(command) {
             Ok(())
         } else {
-            Err("The core has stopped. Restart Lark.".into())
+            Err("The core has stopped. Restart slsk.cat.".into())
         }
     }
 }
@@ -66,7 +66,7 @@ fn start_core(app: &AppHandle) -> Commander {
 
     let handle = app.clone();
     thread::Builder::new()
-        .name("lark-events".into())
+        .name("slskcat-events".into())
         .spawn(move || {
             // `recv` ends only when the engine is dropped, which happens when
             // this thread exits — so the loop ends on app shutdown.
@@ -245,5 +245,5 @@ pub fn run() {
             set_upload_slots,
         ])
         .run(tauri::generate_context!())
-        .expect("starting the Lark window");
+        .expect("starting the slsk.cat window");
 }

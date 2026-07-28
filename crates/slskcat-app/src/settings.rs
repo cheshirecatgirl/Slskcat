@@ -13,7 +13,7 @@
 //! Losing a saved password is an inconvenience; refusing to start is not
 //! an acceptable response to it.
 
-use lark_core::model::{Config, Credentials};
+use slskcat_core::model::{Config, Credentials};
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -21,7 +21,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 /// Identifies our entry in the OS credential store.
-const KEYCHAIN_SERVICE: &str = "dev.lark.client";
+const KEYCHAIN_SERVICE: &str = "cat.slsk.client";
 const FILE: &str = "settings.json";
 
 /// What the interface reads and writes.
@@ -91,8 +91,36 @@ fn path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("No config directory available: {error}"))?;
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
+    restrict(&dir);
     Ok(dir.join(FILE))
 }
+
+/// Restrict a path to its owner on Unix.
+///
+/// The settings file names the account and every shared directory — enough to
+/// profile what someone has and where it lives. On a shared machine the
+/// default mode would leave that readable by any other local user, so both the
+/// directory and the file are narrowed to the owner.
+///
+/// Best effort: a filesystem that cannot represent the mode (a mounted
+/// network share, for instance) is not a reason to refuse to save settings.
+#[cfg(unix)]
+fn restrict(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let Ok(metadata) = std::fs::metadata(path) else { return };
+    let mode = if metadata.is_dir() { 0o700 } else { 0o600 };
+    let mut permissions = metadata.permissions();
+    if permissions.mode() & 0o777 != mode {
+        permissions.set_mode(mode);
+        let _ = std::fs::set_permissions(path, permissions);
+    }
+}
+
+/// Windows and macOS place the config directory under the user profile, which
+/// is already owner-scoped, so there is nothing to narrow.
+#[cfg(not(unix))]
+fn restrict(_path: &std::path::Path) {}
 
 /// Read the credential store, treating every failure as "nothing saved".
 fn read_password(username: &str) -> (String, bool) {
@@ -170,6 +198,7 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
         .map_err(|error| format!("Could not encode settings: {error}"))?;
     std::fs::write(&file, text)
         .map_err(|error| format!("Could not write {}: {error}", file.display()))?;
+    restrict(&file);
 
     let stored = write_password(&settings.username, &settings.password, settings.remember_password);
 
@@ -193,6 +222,28 @@ mod tests {
         let json = serde_json::to_string(&settings).unwrap();
         assert!(!json.contains("hunter2"), "the password must not reach disk: {json}");
         assert!(json.contains("listener"), "the username should be stored");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saved_files_are_readable_only_by_their_owner() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("slskcat-perm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("settings.json");
+        std::fs::write(&file, "{}").unwrap();
+
+        restrict(&dir);
+        restrict(&file);
+
+        let mode = |p: &std::path::Path| {
+            std::fs::metadata(p).unwrap().permissions().mode() & 0o777
+        };
+        assert_eq!(mode(&file), 0o600, "the settings file must not be group- or world-readable");
+        assert_eq!(mode(&dir), 0o700, "nor the directory holding it");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

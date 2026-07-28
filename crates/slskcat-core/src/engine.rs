@@ -59,7 +59,7 @@ impl Engine {
         let (command_tx, command_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel();
         let worker = thread::Builder::new()
-            .name("lark-core".into())
+            .name("slskcat-core".into())
             .spawn(move || run(backend, &command_rx, &EventSink::new(event_tx)))
             .expect("spawning the core worker thread");
 

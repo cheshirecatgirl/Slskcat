@@ -42,7 +42,7 @@
 <aside>
   <div class="brand">
     <div class="mark" aria-hidden="true"></div>
-    <span>Lark</span>
+    <span>slsk.cat</span>
   </div>
 
   <!-- The command bar is the primary way in, so it sits above navigation. -->

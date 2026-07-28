@@ -212,7 +212,7 @@ needs testing on real hardware before release.
 Architecture is unchanged by this decision, which is the point of having built
 the core behind a trait:
 
-- `lark-core` stays exactly as it is — a plain Rust crate, `Command` in and
+- `slskcat-core` stays exactly as it is — a plain Rust crate, `Command` in and
   `Event` out.
 - Tauri's backend *is* Rust, so the core is used in-process with no sidecar and
   no serialisation boundary to the protocol library.
@@ -222,7 +222,7 @@ the core behind a trait:
 ### Fallbacks
 
 - **If WebKitGTK proves unacceptable on Linux:** the view layer is replaceable
-  with Iced 0.14 without touching `lark-core`. That is why the core was built
+  with Iced 0.14 without touching `slskcat-core`. That is why the core was built
   first and kept free of UI concerns.
 - **If `soulseek-rs-lib` proves too unstable:** re-point the `Backend` seam at
   an **slskd sidecar** over its HTTP API — the most battle-tested protocol

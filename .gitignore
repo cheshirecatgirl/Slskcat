@@ -7,4 +7,4 @@ node_modules/
 ui/dist/
 
 # Tauri codegen
-crates/lark-app/gen/
+crates/slskcat-app/gen/

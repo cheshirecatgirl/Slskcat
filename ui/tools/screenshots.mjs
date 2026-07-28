@@ -48,7 +48,7 @@ const bridge = () => {
 
   // Stands in for what the settings file and credential store would hold.
   window.__settings = {
-    username: "lark_listener",
+    username: "slsk_listener",
     password: "",
     rememberPassword: false,
     downloadDir: "/home/listener/Downloads",
@@ -60,7 +60,7 @@ const bridge = () => {
 
   // Push a core event into the app exactly as the Rust side would.
   window.__emit = (payload) => {
-    eventHandler?.({ event: "lark://event", id: 1, payload });
+    eventHandler?.({ event: "slskcat://event", id: 1, payload });
   };
 };
 
@@ -99,14 +99,14 @@ const run = async () => {
     const shot = (name) => page.screenshot({ path: `${OUT}/${scheme}-${name}.png` });
 
     // 1. Sign-in
-    await page.fill('input[autocomplete="username"]', "lark_listener");
+    await page.fill('input[autocomplete="username"]', "slsk_listener");
     await page.fill('input[type="password"]', "hunter2");
     await page.waitForTimeout(500);
     await shot("1-connect");
 
     // 2. Connected, with a search in flight
     await page.evaluate(() => {
-      window.__emit({ type: "connected", data: { username: "lark_listener" } });
+      window.__emit({ type: "connected", data: { username: "slsk_listener" } });
       window.__emit({ type: "sharesUpdated", data: { directories: 212, files: 18422 } });
     });
     await page.waitForTimeout(300);

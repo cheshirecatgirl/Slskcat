@@ -84,7 +84,6 @@
     {#if !active}
       <div class="empty">
         <h3>No room open</h3>
-        <p>Pick a room on the left to join the conversation.</p>
       </div>
     {:else}
       <header>

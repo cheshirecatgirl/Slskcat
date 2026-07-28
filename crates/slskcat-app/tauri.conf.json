@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Lark",
+  "productName": "slsk.cat",
   "version": "0.1.0",
-  "identifier": "dev.lark.client",
+  "identifier": "cat.slsk.client",
   "build": {
     "frontendDist": "../../ui/dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Lark",
+        "title": "slsk.cat",
         "width": 1180,
         "height": 780,
         "minWidth": 880,
@@ -31,6 +31,6 @@
     "icon": ["icons/icon.png"],
     "category": "Music",
     "shortDescription": "A lightweight Soulseek client",
-    "longDescription": "Lark is a lightweight desktop client for the Soulseek file sharing network."
+    "longDescription": "slsk.cat is a lightweight desktop client for the Soulseek file sharing network."
   }
 }

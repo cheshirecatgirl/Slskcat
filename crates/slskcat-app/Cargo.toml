@@ -1,6 +1,6 @@
 [package]
-name = "lark-app"
-description = "Lark, a lightweight Soulseek client"
+name = "slskcat-app"
+description = "slsk.cat, a lightweight Soulseek client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,14 +11,14 @@ rust-version.workspace = true
 workspace = true
 
 [lib]
-name = "lark_app"
+name = "slskcat_app"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-lark-core = { path = "../lark-core" }
+slskcat-core = { path = "../slskcat-core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

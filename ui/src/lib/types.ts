@@ -1,8 +1,8 @@
 /**
  * TypeScript mirrors of the core's domain types.
  *
- * These correspond one-to-one with `lark_core::model` and
- * `lark_core::event`. Enums carrying data are serialised adjacently tagged
+ * These correspond one-to-one with `slskcat_core::model` and
+ * `slskcat_core::event`. Enums carrying data are serialised adjacently tagged
  * (`{ type, data }`), which is what lets a `switch` on `type` narrow the
  * payload.
  */
@@ -83,7 +83,7 @@ export interface Config {
 }
 
 /**
- * Persisted preferences, as `lark_app::settings::Settings`.
+ * Persisted preferences, as `slskcat_app::settings::Settings`.
  *
  * `password` is never written to the settings file — it round-trips through
  * the OS credential store — and `keychainAvailable` reports whether that
