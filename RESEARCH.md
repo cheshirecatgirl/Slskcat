@@ -91,62 +91,98 @@ process** with IPC. That directly contradicts the "lightweight" requirement.
 
 ## 2. App shell
 
-| Option | Bundle | Idle RAM | UI ceiling | Verdict |
-|---|---|---|---|---|
-| **Tauri v2** (2.11.5) | 5–10 MB | ~45–100 MB | full modern CSS | **best fit** |
-| Electron | 80–200 MB | ~120–180 MB | full modern CSS | fails "lightweight" |
-| Avalonia (.NET) | ~70–100 MB | moderate | good, more effort | viable, heavier |
-| Qt / GTK | small | low | dated unless heavily themed | poor UX-per-effort |
-| Flutter | ~40 MB | moderate | excellent | no protocol library |
+**Hard constraint: native software, not web-based.** This rules out Electron
+outright, and also rules out Tauri — although a Tauri app is a genuinely
+installed native binary, it still renders its UI in an OS WebView with
+HTML/CSS, which is not what "software based, not web based" asks for. Both are
+recorded below only to document why they were rejected.
 
-Tauri uses the OS's native WebView instead of bundling Chromium. Reference
-point: Hoppscotch's Electron→Tauri migration reported 165 MB → 8 MB bundle and
-~70% lower memory.
+That leaves true native-widget toolkits. Since the viable protocol library is
+Rust (see §1), staying in Rust keeps the core in-process with zero IPC.
 
-The trade-off Tauri asks for is a Rust backend — which, given that the best
-footprint-compatible protocol library is *already Rust*, is a benefit here
-rather than a cost. Webview inconsistency across platforms is the genuine
-downside; it is manageable by targeting a conservative CSS baseline and
-testing on all three platforms.
+| Option | Version | API stability | Look/feel ceiling | License | Verdict |
+|---|---|---|---|---|---|
+| **Iced** | 0.14.0 | 0.x, breaking | fully custom, proven | MIT | **recommended** |
+| **Slint** | 1.17.1 | **stable 1.x** | excellent, DSL + live preview | GPL / royalty-free | strong runner-up |
+| egui | 0.35.0 | 0.x | utilitarian, immediate-mode | MIT/Apache | fails "beautiful" |
+| Freya | 0.4.0 | early | good (Skia, CSS-like) | MIT | too young |
+| Xilem | 0.4.0 | experimental | unproven | Apache | not production-ready |
+| Avalonia (.NET) | — | stable | good, more effort | MIT | needs .NET runtime + IPC to Rust |
+| Qt / GTK | — | stable | dated unless heavily themed | LGPL/GPL | poor UX-per-effort, C++/C binding tax |
+| ~~Tauri v2~~ | 2.11.5 | stable | full CSS | MIT | **rejected: webview UI** |
+| ~~Electron~~ | — | stable | full CSS | MIT | **rejected: webview + 80–200 MB** |
+
+### Iced vs Slint
+
+These are the only two serious contenders.
+
+**Iced 0.14** (Dec 2025) is pure Rust with an Elm-style architecture. Its
+strongest credential is that **System76's COSMIC desktop is built on it** —
+COSMIC shipped Epoch 1.0 and is now at 1.3, meaning an entire production
+desktop environment (file manager, settings, terminal, app store) runs on this
+toolkit. That is the most convincing possible answer to "can it handle a
+complex, data-dense application". 0.14 added reactive rendering, hot reloading,
+headless testing, and smarter scrollbars.
+
+**Slint 1.17** has the better *authoring* story: a declarative UI DSL with an
+LSP and live preview, so iterating on visual design is much faster, and it
+carries a stable 1.x API guarantee where Iced is still 0.x and breaks between
+releases. Against it: the DSL is deliberately limited for complex logic, its
+`ListView` virtualization requires uniform row heights, and its centre of
+gravity is embedded/automotive rather than data-dense desktop tools.
+
+**Choosing Iced.** Two reasons dominate:
+
+1. **The Elm architecture is an unusually good fit for this specific app.** A
+   Soulseek client is almost entirely event-driven — search hits, transfer
+   progress, room chatter and peer state all arrive asynchronously from the
+   network. Iced's `Message` enum + `update()` loop is exactly that shape, and
+   `Subscription` is the designed-in way to bridge a background thread's
+   channel into the UI. The protocol core's threads feed messages in; the UI is
+   a pure function of state.
+2. **COSMIC proves the ceiling.** Complexity and polish at full-desktop scale
+   are demonstrated, not hypothetical.
+
+The accepted cost is Iced's 0.x churn — pinned exact versions and an upgrade
+being a deliberate, scheduled task rather than a surprise.
 
 ---
 
 ## Recommendation
 
-**Tauri v2 + Rust core built on a pinned, wrapped `soulseek-rs-lib` + a web
-frontend (Svelte 5 or React, with Tailwind v4).**
+**Iced 0.14 + an in-process Rust core built on a pinned, wrapped
+`soulseek-rs-lib`. One language, one process, one native binary.**
 
-This is the only combination that satisfies both halves of the brief:
+- Protocol library and UI toolkit are both Rust — no sidecar, no IPC, no second
+  runtime to ship.
+- Native rendering, no webview, no bundled browser engine.
+- Single self-contained executable; low memory footprint.
+- Fully custom styling, so the "modern and beautiful" requirement is a design
+  problem rather than a toolkit limitation.
 
-- The protocol library and the app shell are the **same language**, so there is
-  one process, no sidecar, no cross-runtime IPC, and no second runtime to ship.
-- Bundle lands in single-digit MB with idle RAM well under 100 MB.
-- The UI is ordinary modern web tech, so "beautiful" is achievable at
-  reasonable effort — which is not true of Qt/GTK, and is more work in Avalonia.
+Architecture: the Soulseek client runs on its own thread(s); an Iced
+`Subscription` bridges its event channel into the UI message loop. Incremental
+search results come from kicking off `search_with_cancel` on a worker and
+polling `get_search_results`, emitting deltas as messages.
 
-Architecture: the Soulseek client runs on its own thread(s) inside the Tauri
-process; the frontend drives it through Tauri commands and receives streaming
-updates (search hits, transfer progress) through Tauri's event channel.
-Incremental search results come from kicking off `search_with_cancel` on a
-worker and polling `get_search_results`, emitting deltas to the UI.
+### Fallbacks
 
-### The main fallback
-
-If `soulseek-rs-lib` proves too unstable in practice, the escape hatch is a
-**slskd sidecar**: keep the entire Tauri frontend, and re-point the `core`
-boundary at slskd's HTTP API instead of in-process Rust. That buys the most
-mature protocol stack in exchange for the .NET runtime and a second process.
-Keeping the `core` layer trait-shaped from day one is what makes this a
-contained change rather than a rewrite.
+- **If `soulseek-rs-lib` proves too unstable:** re-point the `core` boundary at
+  an **slskd sidecar** over its HTTP API — the most battle-tested protocol
+  stack — in exchange for the .NET runtime and a second process. Keeping `core`
+  trait-shaped from day one makes this a contained change, not a rewrite.
+- **If Iced's 0.x churn or styling effort becomes the bottleneck:** Slint 1.17
+  is the drop-in-scope alternative for the view layer, since the core is
+  deliberately decoupled from it.
 
 ---
 
 ## Build environment note
 
-This container has Rust 1.94.1, Node 22.22.2, pnpm 10.33, and bun 1.3.11.
-It does **not** have `webkit2gtk-4.1`, so the Tauri GUI cannot be launched
-here — the Rust core and the frontend can be compiled and tested, but visual
-verification has to happen on a real desktop.
+This container has Rust 1.94.1 and Cargo 1.94.1, which is all the chosen stack
+requires. It is a headless Linux container with no display server, so the GUI
+cannot be *launched* here — the core and the UI code compile and unit-test
+fine, but visual verification has to happen on a real desktop.
 
 ---
 
@@ -160,3 +196,8 @@ verification has to happen on a real desktop.
 - [slskd](https://github.com/slskd/slskd)
 - [Tauri vs Electron 2026 benchmarks (PkgPulse)](https://www.pkgpulse.com/blog/best-desktop-app-frameworks-2026)
 - [Desktop stacks 2026 comparison (Digital Applied)](https://www.digitalapplied.com/blog/desktop-apps-web-stack-tauri-electron-deno-wails-2026)
+- [Iced](https://github.com/iced-rs/iced) · [Iced 0.14 release coverage (Phoronix)](https://www.phoronix.com/news/Iced-0.14-Rust-GUI-LIbrary) · [Iced book/FAQ](https://book.iced.rs/faq.html)
+- [Slint](https://github.com/slint-ui/slint) · [Slint vs Iced discussion](https://github.com/slint-ui/slint/discussions/2224)
+- [COSMIC desktop (built on Iced)](https://en.wikipedia.org/wiki/COSMIC_desktop)
+- [The Rust GUI Landscape in 2026](https://wrenlearnsrust.com/posts/2026-03-11-rust-gui-landscape-2026.html)
+- [State of Rust GUI libraries (LogRocket)](https://blog.logrocket.com/state-rust-gui-libraries/)
