@@ -96,8 +96,7 @@
     height: 100%;
   }
   header {
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--line);
+    padding: 15px 18px 4px;
   }
   h2 {
     font-size: 15px;
@@ -108,17 +107,15 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 18px 16px 40px;
+    padding: 6px 18px 40px;
   }
 
   section {
     max-width: 560px;
-    padding-bottom: 22px;
-    margin-bottom: 22px;
-    border-bottom: 1px solid var(--line-soft);
-  }
-  section:last-child {
-    border-bottom: none;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
   }
 
   h3 {
@@ -150,7 +147,7 @@
     gap: 10px;
     padding: 6px 9px;
     border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    background: var(--surface);
   }
   .path {
     flex: 1;
@@ -159,8 +156,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    direction: rtl;
-    text-align: left;
   }
 
   .stat {

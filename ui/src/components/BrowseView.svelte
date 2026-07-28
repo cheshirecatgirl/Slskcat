@@ -1,7 +1,7 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
-  import { bytes, fileName } from "../lib/format";
+  import { bytes, fileName, tailPath } from "../lib/format";
 
   let who = $state("");
   let pending = $state(false);
@@ -101,7 +101,7 @@
         <div class="folder">
           <button class="dirline" onclick={() => (open = { ...open, [dir.path]: !open[dir.path] })}>
             <span class="chev" class:open={open[dir.path]} aria-hidden="true">▶</span>
-            <span class="dirname selectable">{dir.path}</span>
+            <span class="dirname selectable" title={dir.path}>{tailPath(dir.path, 3)}</span>
             <span class="dircount num">{dir.files.length}</span>
             <span
               class="btn quiet small"
@@ -146,8 +146,7 @@
     height: 100%;
   }
   header {
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--line);
+    padding: 15px 18px 12px;
   }
   form {
     display: flex;
@@ -181,12 +180,12 @@
     align-items: center;
     gap: 9px;
     width: 100%;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--line-soft);
+    padding: 8px 18px;
     text-align: left;
+    transition: background var(--fast);
   }
   .dirline:hover {
-    background: var(--surface-2);
+    background: var(--accent-quiet);
   }
   .chev {
     font-size: 8px;
@@ -201,8 +200,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    direction: rtl;
-    text-align: left;
   }
   .dircount {
     font-size: 11px;
@@ -210,15 +207,17 @@
   }
 
   .files {
-    background: var(--bg);
-    border-bottom: 1px solid var(--line-soft);
+    margin: 2px 10px 6px;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    overflow: hidden;
   }
   .file {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 82px 52px;
     align-items: center;
     gap: 12px;
-    padding: 5px 16px 5px 37px;
+    padding: 5px 14px 5px 30px;
   }
   .file:hover {
     background: var(--surface-2);

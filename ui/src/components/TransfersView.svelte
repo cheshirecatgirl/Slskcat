@@ -163,8 +163,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--line);
+    padding: 15px 18px 11px;
   }
   h2 {
     margin-right: auto;
@@ -188,6 +187,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    padding-bottom: 10px;
   }
 
   .row {
@@ -196,11 +196,15 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 14px;
-    padding: 11px 16px;
-    border-bottom: 1px solid var(--line-soft);
+    margin: 0 10px 3px;
+    padding: 11px 14px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface-2);
+    transition: background var(--fast);
   }
   .row:hover {
-    background: var(--surface-2);
+    background: var(--surface-3);
   }
 
   /* The progress fill is a background layer rather than a separate bar, so a

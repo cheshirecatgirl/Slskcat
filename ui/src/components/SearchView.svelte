@@ -1,7 +1,9 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app, type ResultRow } from "../lib/state.svelte";
-  import { bitrate, bytes, duration, extension, fileName, parentPath, rate } from "../lib/format";
+  import { bitrate, bytes, duration, extension, fileName, parentPath, rate, tailPath } from "../lib/format";
+
+  let { onCommand }: { onCommand: () => void } = $props();
 
   let query = $state("");
   let filter = $state("");
@@ -126,6 +128,9 @@
         autocapitalize="off"
       />
       <button class="btn primary" type="submit" disabled={!query.trim()}>Search</button>
+      <button class="btn quiet" type="button" onclick={onCommand} title="Command bar">
+        <span class="kbd">⌘K</span>
+      </button>
     </form>
 
     {#if app.searches.length > 0}
@@ -172,7 +177,7 @@
     <div class="head">
       {#each columns as col (col.key)}
         <button class="th {col.cls}" onclick={() => sortBy(col.key)}>
-          {col.label}
+          <span>{col.label}</span>
           {#if sortKey === col.key}<span class="caret">{sortAsc ? "▲" : "▼"}</span>{/if}
         </button>
       {/each}
@@ -194,9 +199,10 @@
              while only the visible window is actually rendered. -->
         <div class="spacer" style="height: {rows.length * ROW}px">
           <div class="window" style="transform: translateY({first * ROW}px)">
-            {#each visible as row (row.username + row.path)}
+            {#each visible as row, i (row.username + row.path)}
               <div
                 class="row"
+                class:alt={(first + i) % 2 === 1}
                 ondblclick={() => download(row)}
                 role="button"
                 tabindex="-1"
@@ -204,7 +210,7 @@
               >
                 <div class="c-name">
                   <span class="fname selectable">{fileName(row.path)}</span>
-                  <span class="fpath">{parentPath(row.path)}</span>
+                  <span class="fpath">{tailPath(parentPath(row.path))}</span>
                 </div>
                 <div class="c-size num">{bytes(row.size)}</div>
                 <div class="c-rate num">
@@ -236,8 +242,7 @@
   }
 
   header {
-    padding: 14px 16px 0;
-    border-bottom: 1px solid var(--line);
+    padding: 15px 18px 0;
   }
 
   form {
@@ -264,7 +269,8 @@
   .tabs {
     display: flex;
     gap: 3px;
-    margin-top: 11px;
+    margin-top: 12px;
+    padding-bottom: 2px;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -276,20 +282,22 @@
     align-items: center;
     gap: 6px;
     max-width: 190px;
-    padding: 6px 10px;
-    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    padding: 5px 11px;
+    border-radius: 999px;
     color: var(--text-3);
     font-size: 12.5px;
-    border-bottom: 2px solid transparent;
-    transition: color var(--fast), background var(--fast);
+    transition: color var(--fast), background var(--fast), transform var(--fast);
   }
   .tab:hover {
     background: var(--surface-2);
     color: var(--text-2);
   }
+  .tab:active {
+    transform: scale(0.97);
+  }
   .tab.active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
+    background: var(--accent-quiet);
+    color: var(--accent);
   }
   .tab .label {
     overflow: hidden;
@@ -323,8 +331,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 16px;
-    border-bottom: 1px solid var(--line-soft);
+    padding: 10px 18px;
   }
   .field.slim {
     padding: 5px 9px;
@@ -365,35 +372,52 @@
     grid-template-columns: minmax(0, 1fr) 82px 140px 170px 92px 56px;
     align-items: center;
     gap: 12px;
-    padding: 0 16px;
+    padding: 0 18px;
   }
 
   .head {
     height: 30px;
-    border-bottom: 1px solid var(--line);
     background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    margin: 0 10px;
+    padding: 0 8px;
   }
+  /*
+   * Deliberately not a flex container. Chromium gives `<button>` an internal
+   * anonymous wrapper that centres its children, and `justify-content` on the
+   * button does not override it — the labels end up centred in their columns.
+   * Plain inline flow inside the button sidesteps that entirely, and
+   * `text-align` then does the alignment honestly.
+   */
   .th {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    display: block;
+    padding: 0;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-3);
     text-align: left;
+    white-space: nowrap;
   }
   .th:hover {
     color: var(--text-2);
   }
   .caret {
+    margin-left: 4px;
     font-size: 8px;
   }
   .c-size,
   .c-rate,
   .c-speed {
     justify-content: flex-end;
+    text-align: right;
+  }
+  /* The body cells are flex; the header cells are not, so they need the
+     text-align form of the same intent. */
+  .head .c-size,
+  .head .c-rate,
+  .head .c-speed {
     text-align: right;
   }
 
@@ -416,11 +440,18 @@
 
   .row {
     height: 34px;
-    border-bottom: 1px solid var(--line-soft);
     cursor: default;
+    transition: background var(--fast);
+  }
+  /* Zebra banding rather than rules: quieter, and easier to track across a
+     wide row. It is driven by the row's real index, not its DOM position —
+     `:nth-child` would band the sliding window instead of the data, and the
+     stripes would swap as you scroll. */
+  .row.alt {
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
   }
   .row:hover {
-    background: var(--surface-2);
+    background: var(--accent-quiet);
   }
   .row:hover .get {
     opacity: 1;
@@ -444,8 +475,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    direction: rtl;
-    text-align: left;
   }
 
   .c-user {

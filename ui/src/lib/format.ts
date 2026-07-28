@@ -46,6 +46,21 @@ export function parentPath(path: string): string {
   return cut === -1 ? "" : path.slice(0, cut);
 }
 
+/**
+ * The last `segments` components of a path, joined with a middle dot.
+ *
+ * Peers share deeply nested paths (`@@a1b2\Music\FLAC\Artist\Album`) whose
+ * useful part is at the end. Trimming here rather than with CSS is deliberate:
+ * the `direction: rtl` trick that puts an ellipsis at the start also reorders
+ * leading punctuation, so a real Soulseek path beginning `@@` renders with the
+ * `@@` moved to the end — visibly wrong, and wrong in a way that looks like
+ * corrupted data.
+ */
+export function tailPath(path: string, segments = 2): string {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts.slice(-segments).join(" · ");
+}
+
 /** Lowercased extension without the dot, or `""`. */
 export function extension(path: string): string {
   const name = fileName(path);

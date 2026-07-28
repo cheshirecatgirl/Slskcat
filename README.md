@@ -6,7 +6,15 @@ Native installed software — no browser, no server, no localhost URL. The
 protocol core and the app backend are both Rust in a single process, with the
 interface rendered by the OS WebView.
 
-**4.5 MB binary, 104 KB of interface assets.**
+**4.5 MB binary, ~110 KB of interface assets.**
+
+![Search](docs/dark-2-search.png)
+
+<p align="center">
+  <img src="docs/dark-3-palette.png" width="49%" alt="Command bar">
+  <img src="docs/dark-4-transfers.png" width="49%" alt="Transfers">
+</p>
+<p align="center"><img src="docs/light-5-rooms.png" width="60%" alt="Rooms, light scheme"></p>
 
 > **Status:** early. The core and the app shell are built and compile clean;
 > nothing has yet been tested against the live Soulseek network.
@@ -44,6 +52,24 @@ Svelte 5 with runes. `lib/core.ts` is the only file that imports Tauri;
 `lib/state.svelte.ts` is the only place events are applied. Search results are
 windowed, so a query returning tens of thousands of files renders a few dozen
 rows.
+
+## Interface
+
+The design borrows its organising idea from Arc: the window is a coloured
+field, and the content floats on it as a single rounded canvas. Navigation
+lives entirely in the sidebar, so there is no top chrome at all.
+
+- **Sections are places.** Each one owns an accent — indigo for search, teal
+  for transfers, amber for browse, rose for rooms — and the field behind the
+  canvas tints to match, so moving between them reads as moving somewhere.
+- **⌘K opens the command bar.** It is search-first: type anything and the top
+  action runs it against the network, with browse and navigation underneath.
+- **Separation by elevation and colour, not borders.** Almost no rules or
+  dividers; surfaces sit at different depths instead.
+- **Springy, restrained motion**, and `prefers-reduced-motion` is honoured.
+
+Both colour schemes are designed rather than inverted, and the interface
+follows the system setting.
 
 ## Design
 
@@ -90,6 +116,21 @@ cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 
 cargo tauri dev                   # run the app
+```
+
+### Reviewing the interface without a desktop
+
+`ui/tools/screenshots.mjs` renders the built interface in headless Chromium
+against a mocked Tauri bridge, driving it through sign-in, search, the command
+bar, transfers and rooms in both colour schemes. It is how the screenshots
+above were produced, and how the UI is checked in environments with no display
+server. Playwright is deliberately not a dependency — install it on demand:
+
+```bash
+pnpm build
+python3 -m http.server 8899 -d dist &
+pnpm dlx playwright@latest        # once
+node tools/screenshots.mjs ../docs
 ```
 
 ## Known limitations

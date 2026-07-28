@@ -1,35 +1,42 @@
 /*
- * Lark design tokens.
+ * Lark design tokens — Arc-inspired.
  *
- * Dark first, because that is how a music tool is usually lived in, with a
- * light scheme that is a real design rather than an inversion. Everything is
- * expressed in custom properties so a component never hard-codes a colour.
+ * The organising idea is borrowed from Arc: the window is a coloured field,
+ * and the content floats on it as a single rounded canvas. Navigation lives
+ * entirely in the sidebar, which sits *on* the colour rather than in a panel
+ * of its own, so there is no top chrome at all.
  *
- * No web fonts: the CSP is `default-src 'self'`, and the system stack is both
- * faster and more native-feeling than anything that would need downloading.
+ * Three consequences run through everything below:
+ *   - separation comes from elevation and colour, not from borders;
+ *   - each section owns an accent, and the field tints to match it;
+ *   - motion is springy rather than linear, because it is the only thing
+ *     making a flat interface feel physical.
+ *
+ * No web fonts: the CSP is `default-src 'self'`, and the system stack is
+ * faster and more native-feeling than anything that needs downloading.
  */
 
 :root {
   color-scheme: dark;
 
-  /* Surfaces, from furthest back to nearest the eye. */
-  --bg: #0e0e13;
-  --surface: #16161d;
-  --surface-2: #1d1d26;
-  --surface-3: #262632;
-  --line: #2a2a37;
-  --line-soft: #22222d;
+  --bg: #0b0b10;
+  --surface: #131319;
+  --surface-2: #1a1a22;
+  --surface-3: #23232d;
+  --line: #2a2a36;
+  --line-soft: #20202a;
 
-  /* Text, in descending emphasis. */
-  --text: #eceef5;
-  --text-2: #a8abbd;
-  --text-3: #6f7288;
+  --text: #f0f1f6;
+  --text-2: #a5a8ba;
+  --text-3: #6c6f85;
 
-  /* One accent, used sparingly so it still means something. */
+  /* The accent is set per section by [data-space]; these are the fallbacks. */
   --accent: #8b7bf0;
   --accent-hover: #9d8ff5;
   --accent-quiet: #8b7bf01f;
   --accent-text: #fff;
+  --space-a: #6d5ce755;
+  --space-b: #e8799733;
 
   --ok: #4ec9a5;
   --warn: #e8b04b;
@@ -38,42 +45,89 @@
   --warn-quiet: #e8b04b1f;
   --danger-quiet: #f0736e1f;
 
-  --radius: 10px;
-  --radius-sm: 7px;
-  --radius-lg: 14px;
+  /* Arc leans on generous, consistent rounding — squircle-adjacent. */
+  --radius: 12px;
+  --radius-sm: 9px;
+  --radius-lg: 18px;
+  --canvas-radius: 14px;
 
-  --shadow: 0 1px 2px #0006, 0 8px 24px -12px #0009;
+  --shadow-canvas: 0 0 0 1px #ffffff0a, 0 18px 48px -24px #000000cc;
+  --shadow-float: 0 0 0 1px #ffffff0f, 0 24px 64px -20px #000000e6;
 
-  /* One motion scale, so nothing feels out of step with anything else. */
-  --fast: 110ms cubic-bezier(0.2, 0, 0.15, 1);
-  --slow: 220ms cubic-bezier(0.2, 0, 0.15, 1);
+  /* One motion scale. The spring is what makes the interface feel alive. */
+  --fast: 130ms cubic-bezier(0.2, 0, 0.15, 1);
+  --slow: 260ms cubic-bezier(0.2, 0, 0.15, 1);
+  --spring: 420ms cubic-bezier(0.34, 1.4, 0.64, 1);
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --sidebar-w: 208px;
+  --sidebar-w: 216px;
+  --gap: 8px;
+}
+
+/* Section accents. The field, the active pill and every control follow these,
+   so moving between sections reads as moving between places. */
+[data-space="search"] {
+  --accent: #8b7bf0;
+  --accent-hover: #9d8ff5;
+  --accent-quiet: #8b7bf01f;
+  --space-a: #6d5ce766;
+  --space-b: #e879973d;
+}
+[data-space="transfers"] {
+  --accent: #3fbfa0;
+  --accent-hover: #4fd3b2;
+  --accent-quiet: #3fbfa01f;
+  --space-a: #17a08a66;
+  --space-b: #4f8ef73d;
+}
+[data-space="browse"] {
+  --accent: #e0954a;
+  --accent-hover: #eda65d;
+  --accent-quiet: #e0954a1f;
+  --space-a: #cf7a2e66;
+  --space-b: #e0574f3d;
+}
+[data-space="rooms"] {
+  --accent: #ec6f9e;
+  --accent-hover: #f382ad;
+  --accent-quiet: #ec6f9e1f;
+  --space-a: #d9508866;
+  --space-b: #8b5cf63d;
+}
+[data-space="settings"] {
+  --accent: #7f84a3;
+  --accent-hover: #939ab8;
+  --accent-quiet: #7f84a31f;
+  --space-a: #5a607d66;
+  --space-b: #38405c3d;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --bg: #f6f6f9;
+    --bg: #eceaf3;
     --surface: #fff;
-    --surface-2: #f2f2f6;
-    --surface-3: #e8e8ef;
-    --line: #e0e0ea;
-    --line-soft: #ebebf2;
-    --text: #16161d;
-    --text-2: #55586b;
-    --text-3: #85889c;
-    --accent: #6350d8;
-    --accent-hover: #5442c4;
-    --accent-quiet: #6350d814;
+    --surface-2: #f4f4f8;
+    --surface-3: #e9e9f0;
+    --line: #e2e2ec;
+    --line-soft: #eeeef4;
+    --text: #12121a;
+    --text-2: #53566a;
+    --text-3: #83869a;
+    --accent-text: #fff;
     --ok: #12916f;
     --warn: #a86c07;
     --danger: #ce3f3a;
-    --shadow: 0 1px 2px #0000000f, 0 8px 24px -14px #00000024;
+    --shadow-canvas: 0 0 0 1px #00000012, 0 14px 40px -22px #00000059;
+    --shadow-float: 0 0 0 1px #00000014, 0 24px 60px -20px #00000059;
+  }
+  /* The field is a wash rather than a glow when the room is bright. */
+  [data-space] {
+    --space-a: color-mix(in srgb, var(--accent) 34%, transparent);
+    --space-b: color-mix(in srgb, var(--accent) 16%, transparent);
   }
 }
 
@@ -97,12 +151,10 @@ body {
   font-size: 13.5px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  /* A desktop app should not rubber-band or select chrome like a document. */
   overflow: hidden;
   user-select: none;
 }
 
-/* Text the user may genuinely want to copy opts back in. */
 .selectable,
 input,
 textarea {
@@ -130,7 +182,6 @@ button {
   border-radius: var(--radius-sm);
 }
 
-/* Respect a user who has asked the system to calm down. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -154,13 +205,17 @@ button {
   font-weight: 500;
   font-size: 13px;
   white-space: nowrap;
-  transition: background var(--fast), opacity var(--fast);
+  transition: background var(--fast), transform var(--fast), opacity var(--fast);
 }
 .btn:hover:not(:disabled) {
   background: var(--line);
 }
+/* A small, quick squash on press — the cheapest way to make clicks feel real. */
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 .btn.primary {
@@ -185,19 +240,20 @@ button {
 
 .field {
   width: 100%;
-  padding: 8px 11px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid transparent;
+  background: var(--surface-2);
   color: var(--text);
   font: inherit;
-  transition: border-color var(--fast), box-shadow var(--fast);
+  transition: background var(--fast), border-color var(--fast), box-shadow var(--fast);
 }
 .field::placeholder {
   color: var(--text-3);
 }
 .field:focus {
   outline: none;
+  background: var(--surface);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-quiet);
 }
@@ -210,7 +266,6 @@ button {
   border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.01em;
   background: var(--surface-3);
   color: var(--text-2);
 }
@@ -225,6 +280,20 @@ button {
 .tag.danger {
   background: var(--danger-quiet);
   color: var(--danger);
+}
+
+/* A keyboard hint, as used beside the command bar. */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .mono {
@@ -242,20 +311,22 @@ button {
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 6px;
+  gap: 7px;
   height: 100%;
   padding: 48px;
   color: var(--text-3);
   text-align: center;
 }
 .empty h3 {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--text-2);
+  letter-spacing: -0.01em;
 }
 .empty p {
   font-size: 13px;
-  max-width: 34ch;
+  max-width: 36ch;
+  line-height: 1.55;
 }
 
 /* Scrollbars, styled to disappear into the surface they sit on. */

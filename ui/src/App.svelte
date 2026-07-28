@@ -2,17 +2,19 @@
   import { onMount } from "svelte";
   import { onEvent } from "./lib/core";
   import { app } from "./lib/state.svelte";
+  import type { Section } from "./lib/nav";
   import Sidebar from "./components/Sidebar.svelte";
   import Notices from "./components/Notices.svelte";
+  import CommandBar from "./components/CommandBar.svelte";
   import ConnectView from "./components/ConnectView.svelte";
   import SearchView from "./components/SearchView.svelte";
   import TransfersView from "./components/TransfersView.svelte";
   import BrowseView from "./components/BrowseView.svelte";
   import RoomsView from "./components/RoomsView.svelte";
   import SettingsView from "./components/SettingsView.svelte";
-  import type { Section } from "./lib/nav";
 
   let section = $state<Section>("search");
+  let palette = $state(false);
 
   onMount(() => {
     // The subscription resolves asynchronously; unsubscribing has to wait for
@@ -22,16 +24,32 @@
       void subscription.then((unlisten) => unlisten());
     };
   });
+
+  function onKey(event: KeyboardEvent) {
+    // Cmd/Ctrl-K opens the palette from anywhere, the way Arc's command bar
+    // does. Escape is handled inside the palette itself.
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      if (app.connected) palette = !palette;
+    }
+  }
 </script>
 
-<div class="shell">
-  <Sidebar bind:section />
+<svelte:window onkeydown={onKey} />
 
-  <main>
+<!-- The section drives the accent and the colour of the field behind it. -->
+<div class="window" data-space={app.connected ? section : "search"}>
+  <div class="field-glow" aria-hidden="true"></div>
+
+  {#if app.connected}
+    <Sidebar bind:section onCommand={() => (palette = true)} />
+  {/if}
+
+  <div class="canvas" class:solo={!app.connected}>
     {#if !app.connected}
       <ConnectView />
     {:else if section === "search"}
-      <SearchView />
+      <SearchView onCommand={() => (palette = true)} />
     {:else if section === "transfers"}
       <TransfersView />
     {:else if section === "browse"}
@@ -41,24 +59,60 @@
     {:else}
       <SettingsView />
     {/if}
-  </main>
+  </div>
+
+  {#if palette}
+    <CommandBar
+      bind:section
+      onclose={() => (palette = false)}
+    />
+  {/if}
 
   <Notices />
 </div>
 
 <style>
-  .shell {
+  .window {
+    position: relative;
     display: grid;
-    grid-template-columns: var(--sidebar-w) 1fr;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
     height: 100%;
+    padding: var(--gap) var(--gap) var(--gap) 0;
+    background: var(--bg);
+    /* The accent transition is what sells moving between sections. */
+    transition: --accent var(--slow);
+  }
+  .window:has(.canvas.solo) {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--gap);
   }
 
-  main {
+  /*
+   * The coloured field. Two soft radial washes tinted by the active section,
+   * sitting behind everything. Kept as its own layer so only this element
+   * repaints when the section changes.
+   */
+  .field-glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(115% 85% at 3% 0%, var(--space-a), transparent 62%),
+      radial-gradient(95% 75% at 100% 100%, var(--space-b), transparent 58%);
+    transition: background var(--slow);
+  }
+
+  /*
+   * The content canvas: one rounded, elevated surface floating on the field.
+   * Everything else in the app lives inside it.
+   */
+  .canvas {
     position: relative;
     min-width: 0;
     height: 100%;
     overflow: hidden;
+    border-radius: var(--canvas-radius);
     background: var(--surface);
-    border-left: 1px solid var(--line);
+    box-shadow: var(--shadow-canvas);
   }
 </style>

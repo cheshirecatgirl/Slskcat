@@ -89,15 +89,22 @@
     flex-direction: column;
     gap: 13px;
     width: 100%;
-    max-width: 336px;
+    max-width: 348px;
+    animation: rise var(--spring) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
   }
 
   .mark {
-    width: 38px;
-    height: 38px;
-    border-radius: 11px;
-    background: linear-gradient(140deg, #4a3a99, #e87997);
-    box-shadow: var(--shadow);
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    background: linear-gradient(140deg, var(--accent), var(--accent-hover));
+    box-shadow: 0 6px 22px -6px var(--accent);
   }
 
   h1 {

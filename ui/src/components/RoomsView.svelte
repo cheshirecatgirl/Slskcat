@@ -114,7 +114,7 @@
 <style>
   .view {
     display: grid;
-    grid-template-columns: 208px minmax(0, 1fr);
+    grid-template-columns: 200px minmax(0, 1fr);
     height: 100%;
   }
 
@@ -122,15 +122,13 @@
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    background: var(--bg);
-    border-right: 1px solid var(--line);
+    background: var(--surface-2);
   }
   .pane-head {
     position: sticky;
     top: 0;
     padding: 11px 10px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--line-soft);
+    background: var(--surface-2);
   }
   .field.slim {
     padding: 5px 9px;
@@ -156,7 +154,11 @@
     background: var(--surface-2);
   }
   .room.active {
-    background: var(--surface-3);
+    background: var(--accent-quiet);
+  }
+  .room.active .rname {
+    color: var(--accent);
+    font-weight: 500;
   }
   .pick {
     display: flex;
@@ -200,8 +202,7 @@
     display: flex;
     align-items: baseline;
     gap: 10px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--line);
+    padding: 15px 18px;
   }
   h2 {
     font-size: 15px;
@@ -241,8 +242,7 @@
   form {
     display: flex;
     gap: 8px;
-    padding: 11px 16px;
-    border-top: 1px solid var(--line);
+    padding: 11px 18px 14px;
   }
   form .btn {
     flex: none;
