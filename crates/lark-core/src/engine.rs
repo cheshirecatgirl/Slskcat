@@ -28,6 +28,27 @@ enum Message {
     Stop,
 }
 
+/// A cloneable, thread-safe way to send commands, detached from the event
+/// stream.
+///
+/// [`Engine`] holds a `Receiver`, which is not `Sync`, so it cannot be shared
+/// between threads. A `Commander` can: it lets one thread own the engine and
+/// forward its events while other threads still issue commands. That is
+/// exactly what a UI needs — a shared handle for its command layer, and a
+/// single owner draining events.
+#[derive(Debug, Clone)]
+pub struct Commander {
+    commands: Sender<Message>,
+}
+
+impl Commander {
+    /// Queue a command. Returns `false` once the worker has stopped.
+    #[allow(clippy::must_use_candidate)]
+    pub fn send(&self, command: Command) -> bool {
+        self.commands.send(Message::Command(command)).is_ok()
+    }
+}
+
 impl Engine {
     /// Start `backend` on a worker thread.
     ///
@@ -78,6 +99,12 @@ impl Engine {
     #[must_use]
     pub const fn events(&self) -> &Receiver<Event> {
         &self.events
+    }
+
+    /// A shareable handle for sending commands from other threads.
+    #[must_use]
+    pub fn commander(&self) -> Commander {
+        Commander { commands: self.commands.clone() }
     }
 
     /// Stop the worker and wait for it to finish.
@@ -231,6 +258,30 @@ mod tests {
         engine.shutdown(); // must not panic or double-stop
         assert_eq!(stopped.load(Ordering::Relaxed), 1);
         assert!(!engine.send(Command::Disconnect), "a stopped engine accepts no commands");
+    }
+
+    #[test]
+    fn a_commander_sends_from_another_thread() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let engine = Engine::spawn(Spy { seen: Arc::clone(&seen), ..Spy::default() });
+        let commander = engine.commander();
+
+        thread::spawn(move || {
+            commander.send(Command::RequestRoomList);
+        })
+        .join()
+        .unwrap();
+
+        assert!(wait_for(|| seen.lock().unwrap().len() == 1), "the command never arrived");
+        assert_eq!(*seen.lock().unwrap(), vec![Command::RequestRoomList]);
+    }
+
+    #[test]
+    fn a_commander_reports_a_stopped_engine() {
+        let mut engine = Engine::spawn(Spy::default());
+        let commander = engine.commander();
+        engine.shutdown();
+        assert!(!commander.send(Command::Disconnect));
     }
 
     #[test]

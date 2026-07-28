@@ -14,7 +14,7 @@ use std::time::Duration;
 /// Searches are identified by our own counter rather than by query text so
 /// that running the same query twice produces two independently cancellable
 /// searches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct SearchId(pub u64);
 
 impl fmt::Display for SearchId {
@@ -26,7 +26,8 @@ impl fmt::Display for SearchId {
 /// Identifies one transfer. A peer cannot send us two different files with the
 /// same path, so `(username, path)` is unique and stable across restarts —
 /// which is what lets a resumed download reattach to its row in the UI.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransferId {
     pub username: String,
     pub path: String,
@@ -47,7 +48,8 @@ impl fmt::Display for TransferId {
 
 /// A single file offered by a peer, as it appears in search results or in a
 /// browse listing.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileEntry {
     /// The peer's own path for the file, which is what must be sent back when
     /// requesting it. Always in the peer's separator convention, so it is
@@ -56,6 +58,7 @@ pub struct FileEntry {
     pub size: u64,
     /// Decoded from the protocol's numeric attribute map where present.
     pub bitrate: Option<u32>,
+    #[serde(with = "seconds_opt")]
     pub duration: Option<Duration>,
     /// True when the peer reported the file as variable bitrate.
     pub vbr: bool,
@@ -90,7 +93,8 @@ impl FileEntry {
 
 /// One peer's response to a search, kept whole so the UI can show who is
 /// offering what and how good the connection is likely to be.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     pub username: String,
     pub files: Vec<FileEntry>,
@@ -111,7 +115,8 @@ impl SearchHit {
 /// Where a transfer currently is.
 ///
 /// `Queued`, `Active` and `Paused` are live states; the rest are terminal.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum TransferState {
     /// Waiting in the peer's queue. Carries our position when the peer says.
     Queued { place: Option<u32> },
@@ -157,7 +162,8 @@ impl TransferState {
 }
 
 /// A transfer and everything the UI needs to draw its row.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Transfer {
     pub id: TransferId,
     pub size: u64,
@@ -174,28 +180,32 @@ impl Transfer {
 }
 
 /// One directory from a peer's shared-file listing.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SharedDirectory {
     pub path: String,
     pub files: Vec<FileEntry>,
 }
 
 /// A public chat room and how busy it is.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Room {
     pub name: String,
     pub user_count: u32,
 }
 
 /// A line of chat, from a room or a private conversation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     pub author: String,
     pub body: String,
 }
 
 /// Whether a peer is reachable, as far as the server knows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Presence {
     Offline,
     Away,
@@ -204,7 +214,8 @@ pub enum Presence {
 
 /// What is known about a peer. Fields stay `None` until their reply arrives,
 /// because the server answers each part separately.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserSummary {
     pub username: String,
     pub presence: Option<Presence>,
@@ -213,14 +224,16 @@ pub struct UserSummary {
 }
 
 /// Everything needed to log in and serve files.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Credentials {
     pub username: String,
     pub password: String,
 }
 
 /// User-tunable settings that the core needs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Config {
     pub credentials: Credentials,
     /// Where finished downloads land.
@@ -231,6 +244,7 @@ pub struct Config {
     /// Concurrent uploads served before further requests are queued.
     pub upload_slots: usize,
     /// How long a search keeps collecting replies before it is closed.
+    #[serde(with = "seconds")]
     pub search_timeout: Duration,
 }
 
@@ -252,6 +266,34 @@ fn default_download_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .map_or_else(|| PathBuf::from("."), |home| home.join("Downloads"))
+}
+
+/// Serialise a `Duration` as whole seconds, which is the only precision the
+/// interface needs and far easier to consume than serde's default struct.
+mod seconds {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S: Serializer>(value: &Duration, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_u64(value.as_secs())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, D::Error> {
+        u64::deserialize(d).map(Duration::from_secs)
+    }
+}
+
+/// The same, for an optional duration.
+mod seconds_opt {
+    use serde::{Serialize, Serializer};
+    use std::time::Duration;
+
+    // serde's `with` contract hands the field by reference, so the signature
+    // is fixed even though `Option<&Duration>` would read better.
+    #[allow(clippy::ref_option)]
+    pub fn serialize<S: Serializer>(value: &Option<Duration>, s: S) -> Result<S::Ok, S::Error> {
+        value.map(|d| d.as_secs()).serialize(s)
+    }
 }
 
 /// Protocol file attributes are a numeric map; these are the codes we read.

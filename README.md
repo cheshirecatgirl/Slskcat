@@ -1,21 +1,28 @@
 # Lark
 
-A lightweight Soulseek client for the desktop — native software, not a web app
-in a window.
+A lightweight Soulseek client for the desktop.
 
-Written in Rust throughout: the protocol core and the user interface are the
-same language in the same process, so there is no sidecar, no bundled browser
-engine and no second runtime to install.
+Native installed software — no browser, no server, no localhost URL. The
+protocol core and the app backend are both Rust in a single process, with the
+interface rendered by the OS WebView.
 
-> **Status:** early. The core is built and tested; the interface is next.
-> See [RESEARCH.md](RESEARCH.md) for how the stack was chosen.
+**4.5 MB binary, 104 KB of interface assets.**
+
+> **Status:** early. The core and the app shell are built and compile clean;
+> nothing has yet been tested against the live Soulseek network.
+> See [RESEARCH.md](RESEARCH.md) for how the stack was chosen — including the
+> reasoning that was revised along the way.
 
 ## Layout
 
 ```
 crates/
-  lark-core/     protocol core — commands in, events out
+  lark-core/     protocol core — Commands in, Events out
+  lark-app/      Tauri backend — routes between the core and the WebView
+ui/              Svelte 5 interface
 ```
+
+### `lark-core`
 
 - `model` — domain types (`SearchHit`, `Transfer`, `Room`, …). Mentions no
   protocol library.
@@ -25,10 +32,23 @@ crates/
   names that library.
 - `engine` — owns the worker thread and the command/event channels.
 
+### `lark-app`
+
+Deliberately thin. Each user action is a `#[tauri::command]` forwarding a
+`Command`; one thread owns the `Engine` and republishes every `Event` to the
+WebView on a single channel. It holds no protocol knowledge of its own.
+
+### `ui`
+
+Svelte 5 with runes. `lib/core.ts` is the only file that imports Tauri;
+`lib/state.svelte.ts` is the only place events are applied. Search results are
+windowed, so a query returning tens of thousands of files renders a few dozen
+rows.
+
 ## Design
 
-The interface never blocks on the network. It pushes a `Command` and drains
-`Event`s whenever it is ready to redraw:
+The interface never blocks on the network. It sends a command and reacts to
+events:
 
 ```rust
 use lark_core::{Command, Engine, LiveBackend, model::Config};
@@ -41,30 +61,44 @@ for event in engine.drain() {
 }
 ```
 
-Everything the network does arrives as an `Event`, in order. Commands are
-fire-and-forget — failures come back as `Event::Warning` or a specific failure
-event rather than as a return value.
-
-The protocol library is synchronous, so long-running work (a search's
-collection window, a file transfer) runs on its own thread and reports
-progress through `Backend::poll`, which the engine calls on a fixed tick.
+Commands are fire-and-forget — failures come back as `Event::Warning` or a
+specific failure event, never as a return value. The protocol library is
+synchronous, so searches and transfers run on their own threads and report
+progress through `Backend::poll` on a fixed tick.
 
 ### Why the `Backend` seam exists
 
 `soulseek-rs-lib` is capable and actively developed, but it is a young
 solo-maintained project that has broken its API often. It is pinned to an exact
 version and confined to one module, so replacing it — with a fork, or with an
-out-of-process daemon — stays a contained change. Nothing above `Backend`
-would notice.
+out-of-process daemon — stays a contained change.
+
+The same seam is why the shell decision (Tauri, previously Iced) cost nothing
+to reverse: the core has no idea what draws the window.
 
 ## Building
 
-Requires a recent stable Rust toolchain.
+Requires a stable Rust toolchain, Node 20+, and pnpm. On Linux you also need
+the Tauri system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`,
+`libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`).
 
 ```bash
-cargo test      # 25 unit tests, no network access needed
-cargo clippy --all-targets
+pnpm --dir ui install
+
+cargo test                        # 27 unit tests, no network needed
+cargo clippy --all-targets        # clean under pedantic lints
+pnpm --dir ui build               # typecheck + bundle
+
+cargo tauri dev                   # run the app
 ```
+
+## Known limitations
+
+- **Not yet tested against the live network.** Login, transfers and browsing
+  are unverified end to end.
+- **Linux rendering.** Tauri uses WebKitGTK there, which is the weakest of the
+  three platform WebViews; occasional visual artefacts are possible. Windows
+  and macOS use Chromium-based and WebKit engines respectively and are solid.
 
 ## Licence
 

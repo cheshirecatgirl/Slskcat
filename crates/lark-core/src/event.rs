@@ -5,7 +5,8 @@ use crate::model::{
 };
 
 /// Why a session ended.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum Disconnect {
     /// The user asked to disconnect.
     Requested,
@@ -19,7 +20,8 @@ pub enum Disconnect {
 ///
 /// Events are additive: `SearchHits` carries only hits not previously sent for
 /// that search, so the UI appends rather than replacing.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum Event {
     /// Logged in successfully.
     Connected { username: String },

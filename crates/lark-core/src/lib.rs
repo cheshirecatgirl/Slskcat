@@ -28,6 +28,6 @@ pub mod model;
 
 pub use backend::{Backend, EventSink};
 pub use command::{Command, SearchIds};
-pub use engine::Engine;
+pub use engine::{Commander, Engine};
 pub use event::{Disconnect, Event};
 pub use live::LiveBackend;
