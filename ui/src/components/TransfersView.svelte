@@ -1,32 +1,48 @@
 <script lang="ts">
   import { core } from "../lib/core";
-  import { app, type Transfer } from "../lib/state.svelte";
+  import { app } from "../lib/state.svelte";
   import { bytes, eta, fileName, rate } from "../lib/format";
-  import type { TransferState } from "../lib/types";
+  import type { TransferState, UploadState } from "../lib/types";
 
+  let tab = $state<"down" | "up">("down");
   let showDone = $state(true);
 
-  const live = (s: TransferState) =>
+  const liveDown = (s: TransferState) =>
     s.type === "queued" || s.type === "active" || s.type === "paused";
+  const liveUp = (s: UploadState) => s.type === "queued" || s.type === "active";
 
-  const list = $derived.by(() => {
+  const downloads = $derived.by(() => {
     const all = app.transferList;
-    const shown = showDone ? all : all.filter((t) => live(t.state));
-    // Live transfers first — they are the ones the user is waiting on.
+    const shown = showDone ? all : all.filter((t) => liveDown(t.state));
+    // In-flight first: those are the ones being waited on.
     return [...shown].sort((a, b) => {
-      const byLive = Number(live(b.state)) - Number(live(a.state));
+      const byLive = Number(liveDown(b.state)) - Number(liveDown(a.state));
       return byLive !== 0 ? byLive : fileName(a.path).localeCompare(fileName(b.path));
     });
   });
 
-  const done = $derived(app.transferList.filter((t) => !live(t.state)).length);
+  const uploads = $derived.by(() => {
+    const all = app.uploadList;
+    const shown = showDone ? all : all.filter((u) => liveUp(u.state));
+    return [...shown].sort((a, b) => {
+      const byLive = Number(liveUp(b.state)) - Number(liveUp(a.state));
+      return byLive !== 0 ? byLive : fileName(a.path).localeCompare(fileName(b.path));
+    });
+  });
 
-  function progress(state: TransferState): number {
+  const finished = $derived(
+    app.transferList.filter((t) => !liveDown(t.state)).length +
+      app.uploadList.filter((u) => !liveUp(u.state)).length,
+  );
+
+  const ratio = (done: number, total: number) => (total > 0 ? Math.min(done / total, 1) : 0);
+
+  /** Fill fraction for a download row's background, 0–1. */
+  function downProgress(state: TransferState): number {
     switch (state.type) {
       case "active":
-        return state.data.total > 0 ? state.data.transferred / state.data.total : 0;
       case "paused":
-        return state.data.total > 0 ? state.data.transferred / state.data.total : 0;
+        return ratio(state.data.transferred, state.data.total);
       case "completed":
         return 1;
       default:
@@ -34,16 +50,20 @@
     }
   }
 
-  /** The right-hand status line for a row. */
-  function detail(state: TransferState): string {
+  /** The same for an upload, whose byte counts live on the row, not the state. */
+  function upProgress(state: UploadState, sent: number, size: number): number {
+    if (state.type === "completed") return 1;
+    return state.type === "active" ? ratio(sent, size) : 0;
+  }
+
+  function downDetail(state: TransferState): string {
     switch (state.type) {
       case "queued":
         return state.data.place === null ? "Queued" : `Queued · position ${state.data.place}`;
       case "active": {
         const { transferred, total, bytesPerSec } = state.data;
-        const remaining = eta(transferred, total, bytesPerSec);
-        const speed = rate(bytesPerSec);
-        return remaining ? `${speed} · ${remaining} left` : speed;
+        const left = eta(transferred, total, bytesPerSec);
+        return left ? `${rate(bytesPerSec)} · ${left} left` : rate(bytesPerSec);
       }
       case "paused":
         return `Paused at ${bytes(state.data.transferred)}`;
@@ -58,10 +78,24 @@
     }
   }
 
-  function tone(state: TransferState): string {
-    if (state.type === "completed") return "ok";
-    if (state.type === "failed" || state.type === "timedOut") return "danger";
-    if (state.type === "cancelled") return "";
+  function upDetail(state: UploadState, bytesPerSec: number): string {
+    switch (state.type) {
+      case "queued":
+        return `Queued · position ${state.data.place}`;
+      case "active":
+        return rate(bytesPerSec);
+      case "completed":
+        return "Sent";
+      case "cancelled":
+        return "Cancelled";
+      case "failed":
+        return state.data.reason;
+    }
+  }
+
+  function tone(type: string): string {
+    if (type === "completed") return "ok";
+    if (type === "failed" || type === "timedOut") return "danger";
     return "";
   }
 
@@ -73,76 +107,129 @@
     }
   }
 
-  const clearable = $derived(done > 0);
-  function clearFinished(t: Transfer) {
-    void core.cancelTransfer(t.username, t.path);
+  function clearFinished() {
+    for (const t of app.transferList.filter((t) => !liveDown(t.state))) {
+      void core.cancelTransfer(t.username, t.path);
+    }
   }
 </script>
 
 <div class="view">
   <header>
-    <h2>Transfers</h2>
+    <div class="tabs" role="tablist">
+      <button
+        class="tab"
+        class:on={tab === "down"}
+        role="tab"
+        aria-selected={tab === "down"}
+        onclick={() => (tab = "down")}
+      >
+        Downloads
+        {#if app.activeTransfers > 0}<span class="pip num">{app.activeTransfers}</span>{/if}
+      </button>
+      <button
+        class="tab"
+        class:on={tab === "up"}
+        role="tab"
+        aria-selected={tab === "up"}
+        onclick={() => (tab = "up")}
+      >
+        Uploads
+        {#if app.activeUploads > 0}<span class="pip num">{app.activeUploads}</span>{/if}
+      </button>
+    </div>
+
     <label class="check">
       <input type="checkbox" bind:checked={showDone} />
       <span>Show finished</span>
     </label>
-    <button
-      class="btn quiet small"
-      disabled={!clearable}
-      onclick={() => app.transferList.filter((t) => !live(t.state)).forEach(clearFinished)}
-    >
-      Clear finished
-    </button>
+    {#if tab === "down"}
+      <button class="btn quiet small" disabled={finished === 0} onclick={clearFinished}>
+        Clear finished
+      </button>
+    {/if}
   </header>
 
-  {#if list.length === 0}
-    <div class="empty">
-      <h3>No transfers</h3>
-    </div>
+  {#if tab === "down"}
+    {#if downloads.length === 0}
+      <div class="empty"><h3>No downloads</h3></div>
+    {:else}
+      <div class="body">
+        {#each downloads as t (t.username + t.path)}
+          <div class="row">
+            <div
+              class="bar"
+              style="--p: {downProgress(t.state) * 100}%"
+              data-state={t.state.type}
+            ></div>
+
+            <div class="info">
+              <span class="name selectable" title={t.path}>{fileName(t.path)}</span>
+              <span class="peer">from {t.username}</span>
+            </div>
+
+            <div class="status">
+              <span class="detail {tone(t.state.type)}">{downDetail(t.state)}</span>
+              {#if t.state.type === "active"}
+                <span class="num dim">
+                  {bytes(t.state.data.transferred)} / {bytes(t.state.data.total)}
+                </span>
+              {/if}
+            </div>
+
+            <div class="actions">
+              {#if t.state.type === "active" || t.state.type === "queued"}
+                <button
+                  class="btn quiet small"
+                  onclick={() => act(() => core.pauseTransfer(t.username, t.path))}>Pause</button
+                >
+              {:else if t.state.type === "paused"}
+                <button
+                  class="btn quiet small"
+                  onclick={() => act(() => core.resumeTransfer(t.username, t.path))}>Resume</button
+                >
+              {/if}
+              {#if liveDown(t.state)}
+                <button
+                  class="btn quiet small danger"
+                  onclick={() => act(() => core.cancelTransfer(t.username, t.path))}>Cancel</button
+                >
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  {:else if uploads.length === 0}
+    <div class="empty"><h3>No uploads</h3></div>
   {:else}
     <div class="body">
-      {#each list as t (t.username + t.path)}
-        {@const p = progress(t.state)}
+      {#each uploads as u (u.username + u.path)}
         <div class="row">
-          <div class="bar" style="--p: {p * 100}%" data-state={t.state.type}></div>
+          <div
+            class="bar up"
+            style="--p: {upProgress(u.state, u.sent, u.size) * 100}%"
+            data-state={u.state.type}
+          ></div>
 
           <div class="info">
-            <span class="name selectable" title={t.path}>{fileName(t.path)}</span>
-            <span class="from">from {t.username}</span>
+            <span class="name selectable" title={u.path}>{fileName(u.path)}</span>
+            <span class="peer">to {u.username}</span>
           </div>
 
           <div class="status">
-            <span class="detail {tone(t.state)}">{detail(t.state)}</span>
-            {#if t.state.type === "active"}
-              <span class="num dim">
-                {bytes(t.state.data.transferred)} / {bytes(t.state.data.total)}
-              </span>
+            <span class="detail {tone(u.state.type)}">{upDetail(u.state, u.bytesPerSec)}</span>
+            {#if u.state.type === "active"}
+              <span class="num dim">{bytes(u.sent)} / {bytes(u.size)}</span>
             {/if}
           </div>
 
           <div class="actions">
-            {#if t.state.type === "active" || t.state.type === "queued"}
-              <button
-                class="btn quiet small"
-                onclick={() => act(() => core.pauseTransfer(t.username, t.path))}
-              >
-                Pause
-              </button>
-            {:else if t.state.type === "paused"}
-              <button
-                class="btn quiet small"
-                onclick={() => act(() => core.resumeTransfer(t.username, t.path))}
-              >
-                Resume
-              </button>
-            {/if}
-            {#if live(t.state)}
+            {#if liveUp(u.state)}
               <button
                 class="btn quiet small danger"
-                onclick={() => act(() => core.cancelTransfer(t.username, t.path))}
+                onclick={() => act(() => core.cancelUpload(u.username, u.path))}>Stop</button
               >
-                Cancel
-              </button>
             {/if}
           </div>
         </div>
@@ -162,14 +249,50 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 15px 18px 11px;
+    padding: 13px 18px 11px;
   }
-  h2 {
+
+  .tabs {
+    display: flex;
+    gap: 2px;
     margin-right: auto;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--surface-2);
   }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 13px;
+    border-radius: 999px;
+    color: var(--text-3);
+    font-size: 12.5px;
+    font-weight: 500;
+    transition: background var(--fast), color var(--fast), transform var(--fast);
+  }
+  .tab:hover:not(.on) {
+    color: var(--text-2);
+  }
+  .tab:active {
+    transform: scale(0.97);
+  }
+  .tab.on {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px #00000033;
+  }
+  .pip {
+    min-width: 17px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-align: center;
+  }
+
   .check {
     display: flex;
     align-items: center;
@@ -206,8 +329,8 @@
     background: var(--surface-3);
   }
 
-  /* The progress fill is a background layer rather than a separate bar, so a
-     busy list reads as a set of filling rows instead of a field of widgets. */
+  /* The progress fill is the row's own background rather than a separate
+     widget, so a busy list reads as a set of filling rows. */
   .bar {
     position: absolute;
     inset: 0;
@@ -221,6 +344,12 @@
   }
   .bar[data-state="paused"] {
     background: var(--warn-quiet);
+  }
+  /* Uploads fill from the right, so direction is legible at a glance even
+     before reading the row. */
+  .bar.up {
+    left: auto;
+    right: 0;
   }
 
   .info {
@@ -236,7 +365,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .from {
+  .peer {
     font-size: 11.5px;
     color: var(--text-3);
   }

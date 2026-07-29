@@ -9,7 +9,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { CoreEvent, SearchId, Settings } from "./types";
+import type { CoreEvent, SearchId, Settings, ShareVerdict } from "./types";
 
 /** Must match `slskcat_app::EVENT_CHANNEL`. */
 const EVENT_CHANNEL = "slskcat://event";
@@ -38,6 +38,11 @@ export const core = {
     invoke<void>("resume_transfer", { username, path }),
   cancelTransfer: (username: string, path: string) =>
     invoke<void>("cancel_transfer", { username, path }),
+  cancelUpload: (username: string, path: string) =>
+    invoke<void>("cancel_upload", { username, path }),
+
+  /** Ask whether a directory is safe to share, before offering it. */
+  assessShare: (path: string) => invoke<ShareVerdict>("assess_share", { path }),
 
   browseUser: (username: string) => invoke<void>("browse_user", { username }),
   requestUserInfo: (username: string) =>

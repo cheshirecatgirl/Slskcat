@@ -3,9 +3,13 @@
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
 
-  let active = $state<string | null>(null);
+  /** Which conversation the right-hand pane is showing. */
+  type Open = { kind: "room"; name: string } | { kind: "direct"; name: string } | null;
+
+  let open = $state<Open>(null);
   let draft = $state("");
   let query = $state("");
+  let newPeer = $state("");
   let log = $state<HTMLDivElement | null>(null);
 
   onMount(() => {
@@ -20,8 +24,18 @@
     return [...rooms].sort((a, b) => b.userCount - a.userCount).slice(0, 300);
   });
 
-  const messages = $derived(active ? (app.roomMessages[active] ?? []) : []);
-  const members = $derived(active ? (app.roomUsers[active] ?? []) : []);
+  const peers = $derived(Object.keys(app.conversations).sort((a, b) => a.localeCompare(b)));
+
+  const messages = $derived.by(() => {
+    if (!open) return [];
+    return open.kind === "room"
+      ? (app.roomMessages[open.name] ?? [])
+      : (app.conversations[open.name] ?? []);
+  });
+
+  const members = $derived(
+    open?.kind === "room" ? (app.roomUsers[open.name] ?? []) : [],
+  );
 
   // Follow the conversation as it grows, the way a chat window should.
   $effect(() => {
@@ -29,22 +43,43 @@
     if (log) log.scrollTop = log.scrollHeight;
   });
 
-  function open(room: string) {
-    active = room;
-    if (!app.joined.includes(room)) void core.joinRoom(room);
+  function openRoom(name: string) {
+    open = { kind: "room", name };
+    if (!app.joined.includes(name)) void core.joinRoom(name);
   }
 
-  function leave(room: string) {
-    void core.leaveRoom(room);
-    if (active === room) active = null;
+  function openDirect(name: string) {
+    open = { kind: "direct", name };
+  }
+
+  function leave(name: string) {
+    void core.leaveRoom(name);
+    if (open?.kind === "room" && open.name === name) open = null;
+  }
+
+  function startDirect(event: SubmitEvent) {
+    event.preventDefault();
+    const name = newPeer.trim();
+    if (!name) return;
+    // An empty thread is enough to open the pane; the first line creates it.
+    if (!app.conversations[name]) app.conversations = { ...app.conversations, [name]: [] };
+    openDirect(name);
+    newPeer = "";
   }
 
   function send(event: SubmitEvent) {
     event.preventDefault();
     const body = draft.trim();
-    if (!body || !active) return;
-    void core.sendRoomMessage(active, body);
-    // The server echoes our own line back, so nothing is appended locally.
+    if (!body || !open) return;
+
+    if (open.kind === "room") {
+      // The server echoes our own room lines back, so nothing is added here.
+      void core.sendRoomMessage(open.name, body);
+    } else {
+      void core.sendPrivateMessage(open.name, body);
+      // Private messages are not echoed, so the sent line is recorded locally.
+      app.addMessage(open.name, { author: app.username, body });
+    }
     draft = "";
   }
 </script>
@@ -55,12 +90,27 @@
       <input class="field slim" bind:value={query} placeholder="Find a room…" />
     </div>
 
+    {#if peers.length > 0}
+      <p class="group">Direct</p>
+      {#each peers as peer (peer)}
+        <div class="entry" class:active={open?.kind === "direct" && open.name === peer}>
+          <button class="pick" onclick={() => openDirect(peer)}>
+            <span class="name">{peer}</span>
+          </button>
+        </div>
+      {/each}
+    {/if}
+
+    <form class="newpeer" onsubmit={startDirect}>
+      <input class="field slim" bind:value={newPeer} placeholder="Message a user…" />
+    </form>
+
     {#if app.joined.length > 0}
       <p class="group">Joined</p>
       {#each app.joined as room (room)}
-        <div class="room" class:active={active === room}>
-          <button class="pick" onclick={() => open(room)}>
-            <span class="rname">{room}</span>
+        <div class="entry" class:active={open?.kind === "room" && open.name === room}>
+          <button class="pick" onclick={() => openRoom(room)}>
+            <span class="name">{room}</span>
           </button>
           <button class="leave btn quiet small" onclick={() => leave(room)} title="Leave">×</button>
         </div>
@@ -69,10 +119,10 @@
 
     <p class="group">All rooms</p>
     {#each listed as room (room.name)}
-      <div class="room" class:active={active === room.name}>
-        <button class="pick" onclick={() => open(room.name)}>
-          <span class="rname">{room.name}</span>
-          <span class="rcount num">{room.userCount.toLocaleString()}</span>
+      <div class="entry" class:active={open?.kind === "room" && open.name === room.name}>
+        <button class="pick" onclick={() => openRoom(room.name)}>
+          <span class="name">{room.name}</span>
+          <span class="count num">{room.userCount.toLocaleString()}</span>
         </button>
       </div>
     {:else}
@@ -81,19 +131,21 @@
   </aside>
 
   <section>
-    {#if !active}
-      <div class="empty">
-        <h3>No room open</h3>
-      </div>
+    {#if !open}
+      <div class="empty"><h3>Nothing open</h3></div>
     {:else}
       <header>
-        <h2>{active}</h2>
-        <span class="num dim">{members.length.toLocaleString()} here</span>
+        <h2>{open.name}</h2>
+        {#if open.kind === "room"}
+          <span class="num dim">{members.length.toLocaleString()} here</span>
+        {:else}
+          <span class="tag">direct</span>
+        {/if}
       </header>
 
       <div class="log" bind:this={log}>
         {#each messages as message, i (i)}
-          <div class="line">
+          <div class="line" class:mine={message.author === app.username}>
             <span class="who">{message.author}</span>
             <span class="body selectable">{message.body}</span>
           </div>
@@ -103,7 +155,7 @@
       </div>
 
       <form onsubmit={send}>
-        <input class="field" bind:value={draft} placeholder="Message {active}…" />
+        <input class="field" bind:value={draft} placeholder="Message {open.name}…" />
         <button class="btn primary" type="submit" disabled={!draft.trim()}>Send</button>
       </form>
     {/if}
@@ -126,12 +178,23 @@
   .pane-head {
     position: sticky;
     top: 0;
+    z-index: 1;
     padding: 11px 10px;
     background: var(--surface-2);
   }
+  /* The panel is itself `--surface-2`, which is what `.field` uses, so an
+     unmodified input would be invisible against it. */
   .field.slim {
     padding: 5px 9px;
     font-size: 12.5px;
+    background: var(--surface);
+    border-color: var(--line-soft);
+  }
+  .field.slim:focus {
+    border-color: var(--accent);
+  }
+  .newpeer {
+    padding: 4px 10px 2px;
   }
 
   .group {
@@ -143,19 +206,20 @@
     color: var(--text-3);
   }
 
-  .room {
+  .entry {
     display: flex;
     align-items: center;
     margin: 0 6px;
     border-radius: var(--radius-sm);
+    transition: background var(--fast);
   }
-  .room:hover {
-    background: var(--surface-2);
+  .entry:hover {
+    background: #ffffff0a;
   }
-  .room.active {
+  .entry.active {
     background: var(--accent-quiet);
   }
-  .room.active .rname {
+  .entry.active .name {
     color: var(--accent);
     font-weight: 500;
   }
@@ -168,7 +232,7 @@
     padding: 6px 8px;
     text-align: left;
   }
-  .rname {
+  .name {
     flex: 1;
     min-width: 0;
     font-size: 12.5px;
@@ -176,7 +240,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .rcount {
+  .count {
     font-size: 11px;
     color: var(--text-3);
   }
@@ -216,7 +280,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 10px 16px;
+    padding: 10px 18px;
   }
   .line {
     display: grid;
@@ -233,6 +297,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: right;
+  }
+  /* Own lines are muted rather than highlighted: the eye should land on what
+     other people said. */
+  .line.mine .who {
+    color: var(--text-3);
   }
   .body {
     overflow-wrap: anywhere;

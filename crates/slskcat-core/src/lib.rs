@@ -23,6 +23,7 @@ pub mod backend;
 pub mod command;
 pub mod engine;
 pub mod event;
+pub mod guard;
 pub mod live;
 pub mod model;
 
@@ -30,4 +31,5 @@ pub use backend::{Backend, EventSink};
 pub use command::{Command, SearchIds};
 pub use engine::{Commander, Engine};
 pub use event::{Disconnect, Event};
+pub use guard::{ShareRisk, assess_share_path};
 pub use live::LiveBackend;

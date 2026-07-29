@@ -9,10 +9,13 @@ in one process; the interface is rendered by the OS WebView.
 ![Search](docs/dark-2-search.png)
 
 <p align="center">
-  <img src="docs/dark-3-palette.png" width="49%" alt="Command bar">
-  <img src="docs/dark-4-transfers.png" width="49%" alt="Transfers">
+  <img src="docs/dark-4b-uploads.png" width="49%" alt="Uploads">
+  <img src="docs/dark-6b-share-guard.png" width="49%" alt="Share guard refusing a hidden folder and flagging a personal one">
 </p>
-<p align="center"><img src="docs/light-5-rooms.png" width="60%" alt="Rooms, light scheme"></p>
+<p align="center">
+  <img src="docs/dark-3-palette.png" width="49%" alt="Command bar">
+  <img src="docs/light-5b-direct.png" width="49%" alt="Direct messages, light scheme">
+</p>
 
 > Early. Nothing has been tested against the live Soulseek network yet.
 > [RESEARCH.md](RESEARCH.md) records how the stack was chosen.
@@ -76,6 +79,16 @@ rows.
 
 ## Privacy and security
 
+- **Shared folders are classified before they go on the network.** The
+  defining failure of consumer P2P was people sharing a folder they did not
+  mean to — whole home directories, keys and tax returns included. So
+  `guard.rs` refuses the filesystem root, `$HOME` itself, system directories,
+  and **any path with a hidden component** (`~/.ssh`, `~/.gnupg`, `~/.config`);
+  it flags conventionally personal folders (`~/Documents`, `~/Desktop`) for
+  explicit confirmation. This is enforced in the core, not the interface, so a
+  hand-edited settings file or a UI bug still cannot expose a credential
+  directory. It does not resolve symlinks — a known limit, documented in the
+  module.
 - **The password goes to the OS credential store** — Keychain, Credential
   Manager, or the D-Bus Secret Service — never to disk in the clear.
   Remembering it is opt-in. A store that cannot be reached degrades to
@@ -88,6 +101,9 @@ rows.
   `dialog:allow-open`, nothing more.
 - **No telemetry, no analytics, no update pings.** The only network traffic is
   Soulseek itself.
+- **The password is never logged.** Verified across every logging macro in the
+  protocol library, which defaults to `WARN` and is raised only by setting
+  `LOG_LEVEL`/`RUST_LOG` yourself.
 
 Soulseek is a public P2P network: peers see your username, your shared file
 list, and your address when transferring. Nothing here changes that.
@@ -102,6 +118,9 @@ chrome.
   for browse, rose for rooms — and the field tints to match.
 - ⌘K opens the command bar. It is search-first: type anything and the top
   action runs it against the network.
+- Transfers are two tabs, downloads and uploads, given equal weight — uploads
+  are what other people see of you. Upload rows fill from the right, so
+  direction reads before the text does.
 - Separation comes from elevation and colour, not borders.
 - `prefers-reduced-motion` is honoured.
 
@@ -117,7 +136,7 @@ system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libssl-dev`,
 ```bash
 pnpm --dir ui install
 
-cargo test                        # 35 unit tests, no network needed
+cargo test                        # 45 unit tests, no network needed
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 
@@ -141,11 +160,10 @@ node tools/screenshots.mjs ../docs
 ## Not done yet
 
 - **Never tested against the live network.** Every test here is offline.
-- **Private messages** arrive and are stored, but nothing renders them and
-  there is no way to send one.
-- **Uploads have no screen.** You cannot see who is downloading from you.
 - **Wishlist** is supported by the protocol library and not wired up.
 - `requestUserInfo` and `cancelSearch` are in the bridge and called by nothing.
+- The share guard does not follow symlinks, so a link pointing into a refused
+  location is not caught.
 - The keychain path is unexercised — it needs a real desktop session. Only the
   degradation path has been verified.
 - No CI, no packaging run (`tauri build`), no Windows `.ico`.

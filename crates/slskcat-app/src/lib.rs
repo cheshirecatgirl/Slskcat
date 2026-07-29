@@ -155,6 +155,34 @@ fn cancel_transfer(app: State<'_, App>, username: String, path: String) -> Resul
     app.send(Command::CancelTransfer(TransferId::new(username, path)))
 }
 
+#[tauri::command]
+fn cancel_upload(app: State<'_, App>, username: String, path: String) -> Result<(), String> {
+    app.send(Command::CancelUpload(TransferId::new(username, path)))
+}
+
+/// Classify a directory before it is offered to the network.
+///
+/// The core enforces this regardless, but the interface asks first so a
+/// refusal can be explained at the moment of choosing rather than after.
+#[tauri::command]
+fn assess_share(path: PathBuf) -> ShareVerdict {
+    let risk = slskcat_core::assess_share_path(&path);
+    ShareVerdict {
+        allowed: risk.is_allowed(),
+        sensitive: matches!(risk, slskcat_core::ShareRisk::Sensitive(_)),
+        reason: risk.reason().map(str::to_owned),
+    }
+}
+
+/// The interface-facing form of [`slskcat_core::ShareRisk`].
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareVerdict {
+    pub allowed: bool,
+    pub sensitive: bool,
+    pub reason: Option<String>,
+}
+
 // --- commands: peers ---
 
 #[tauri::command]
@@ -234,6 +262,8 @@ pub fn run() {
             pause_transfer,
             resume_transfer,
             cancel_transfer,
+            cancel_upload,
+            assess_share,
             browse_user,
             request_user_info,
             request_room_list,

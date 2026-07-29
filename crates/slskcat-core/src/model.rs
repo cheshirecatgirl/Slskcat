@@ -179,6 +179,43 @@ impl Transfer {
     }
 }
 
+/// Where an upload has got to.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
+pub enum UploadState {
+    /// Waiting for a free slot, at this 1-based place in our own queue.
+    Queued { place: u32 },
+    Active,
+    Completed,
+    Cancelled,
+    Failed { reason: String },
+}
+
+impl UploadState {
+    /// Whether this state can still change on its own.
+    #[must_use]
+    pub const fn is_live(&self) -> bool {
+        matches!(self, Self::Queued { .. } | Self::Active)
+    }
+}
+
+/// A file being served to a peer.
+///
+/// Uploads are what other people can see of you, so the interface shows them
+/// in the same detail as downloads rather than hiding them behind a counter.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Upload {
+    /// The peer receiving the file.
+    pub username: String,
+    /// The peer-facing path being served.
+    pub path: String,
+    pub size: u64,
+    pub sent: u64,
+    pub state: UploadState,
+    pub bytes_per_sec: f64,
+}
+
 /// One directory from a peer's shared-file listing.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -26,6 +26,9 @@ pub enum Command {
     ResumeTransfer(TransferId),
     CancelTransfer(TransferId),
 
+    /// Stop serving a file to a peer.
+    CancelUpload(TransferId),
+
     /// Ask a peer for its full shared-file listing.
     BrowseUser(String),
     /// Ask the server what it knows about a peer.

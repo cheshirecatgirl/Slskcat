@@ -13,11 +13,12 @@ use crate::command::Command;
 use crate::event::{Disconnect, Event};
 use crate::model::{
     ChatMessage, Config, FileEntry, Presence, Room, SearchHit, SearchId, SharedDirectory, Transfer,
-    TransferId, TransferState, UserSummary, file_entry,
+    TransferId, TransferState, Upload, UploadState, UserSummary, file_entry,
 };
 
 use soulseek_rs::{
-    Client, ClientSettings, DownloadStatus, RoomEvent, SearchResult, SessionLoss, UserStatus,
+    Client, ClientSettings, DownloadStatus, RoomEvent, SearchResult, SessionLoss, UploadInfo,
+    UploadStatus, UserStatus,
 };
 
 use std::collections::HashMap;
@@ -86,7 +87,16 @@ impl LiveBackend {
         // Whatever assembled this config — a form, a settings file — may have
         // left the download directory blank. Downloads must never be written
         // to an empty path, so it is repaired before anything uses it.
-        let config = config.normalized();
+        let mut config = config.normalized();
+
+        // Enforced here rather than trusting the caller: a settings file
+        // edited by hand, or any future caller, must not be able to put a
+        // credential directory on a public network.
+        let (allowed, refused) = crate::guard::partition(std::mem::take(&mut config.shared_dirs));
+        config.shared_dirs = allowed;
+        for (path, reason) in refused {
+            out.warn(format!("Not sharing {}: {reason}", path.display()));
+        }
 
         let settings = ClientSettings {
             username: config.credentials.username.clone(),
@@ -306,6 +316,13 @@ impl LiveBackend {
             .collect()
     }
 
+    /// Forward every upload the library has news about.
+    fn drain_uploads(client: &Client, out: &EventSink) {
+        out.emit_all(
+            client.take_upload_events().iter().map(convert_upload).map(Event::UploadUpdated),
+        );
+    }
+
     fn drain_rooms(client: &Client, out: &EventSink) {
         out.emit_all(client.take_room_events().into_iter().map(convert_room_event));
         out.emit_all(client.take_private_messages().into_iter().map(|message| {
@@ -341,8 +358,12 @@ impl LiveBackend {
     }
 
     fn set_shares(&mut self, dirs: Vec<PathBuf>, out: &EventSink) {
+        let (allowed, refused) = crate::guard::partition(dirs);
+        for (path, reason) in refused {
+            out.warn(format!("Not sharing {}: {reason}", path.display()));
+        }
         // Kept even when disconnected, so the next login shares the right set.
-        self.config.shared_dirs = dirs;
+        self.config.shared_dirs = allowed;
         let paths = self
             .config
             .shared_dirs
@@ -405,6 +426,13 @@ impl Backend for LiveBackend {
                 }
             }
             Command::CancelTransfer(id) => self.cancel_transfer(id, out),
+            Command::CancelUpload(id) => {
+                if let Some(client) = self.client(out)
+                    && !client.cancel_upload(&id.username, &id.path)
+                {
+                    out.warn("That upload had already finished.");
+                }
+            }
 
             Command::BrowseUser(username) => self.browse(username, out),
             Command::RequestUserInfo(username) => {
@@ -486,6 +514,7 @@ impl Backend for LiveBackend {
         }
 
         self.drain_transfers(out);
+        Self::drain_uploads(&client, out);
         Self::drain_rooms(&client, out);
         self.drain_browses(&client, out);
         self.report_shares(&client, out);
@@ -529,6 +558,23 @@ fn convert_status(status: &DownloadStatus) -> TransferState {
         DownloadStatus::Completed => TransferState::Completed,
         DownloadStatus::Failed(ref reason) => TransferState::Failed { reason: reason.clone() },
         DownloadStatus::TimedOut => TransferState::TimedOut,
+    }
+}
+
+fn convert_upload(info: &UploadInfo) -> Upload {
+    Upload {
+        username: info.username.clone(),
+        path: info.filename.clone(),
+        size: info.size,
+        sent: info.bytes_sent,
+        state: match info.status {
+            UploadStatus::Queued(place) => UploadState::Queued { place },
+            UploadStatus::InProgress => UploadState::Active,
+            UploadStatus::Completed => UploadState::Completed,
+            UploadStatus::Cancelled => UploadState::Cancelled,
+            UploadStatus::Failed(ref reason) => UploadState::Failed { reason: reason.clone() },
+        },
+        bytes_per_sec: info.speed_bytes_per_sec,
     }
 }
 
@@ -664,6 +710,31 @@ mod tests {
     }
 
     #[test]
+    fn refused_share_paths_never_reach_the_library() {
+        let (out, rx) = sink();
+        let mut backend = LiveBackend::new();
+
+        backend.execute(
+            Command::SetSharedDirs(vec![
+                PathBuf::from("/etc"),
+                PathBuf::from("/home/listener/Music"),
+            ]),
+            &out,
+        );
+
+        let warned = rx.try_recv().unwrap();
+        assert!(
+            matches!(&warned, Event::Warning(text) if text.contains("/etc")),
+            "the refusal should name the path, got {warned:?}"
+        );
+        assert_eq!(
+            backend.config.shared_dirs,
+            vec![PathBuf::from("/home/listener/Music")],
+            "only the safe path is kept"
+        );
+    }
+
+    #[test]
     fn zero_upload_slots_and_timeout_are_repaired() {
         let odd = Config { upload_slots: 0, search_timeout: Duration::ZERO, ..Config::default() }
             .normalized();
@@ -711,6 +782,31 @@ mod tests {
         assert_eq!(hit.files[0].file_name(), "02 track.mp3");
         assert_eq!(hit.files[0].bitrate, Some(320));
         assert_eq!(hit.files[0].duration, Some(std::time::Duration::from_secs(210)));
+    }
+
+    #[test]
+    fn upload_status_maps_onto_upload_state() {
+        let info = |status| UploadInfo {
+            username: "peer".into(),
+            filename: r"share\a.flac".into(),
+            size: 100,
+            bytes_sent: 40,
+            status,
+            speed_bytes_per_sec: 512.0,
+        };
+
+        let queued = convert_upload(&info(UploadStatus::Queued(4)));
+        assert_eq!(queued.state, UploadState::Queued { place: 4 });
+        assert_eq!(queued.sent, 40);
+        assert!(queued.state.is_live());
+
+        assert_eq!(convert_upload(&info(UploadStatus::InProgress)).state, UploadState::Active);
+        assert_eq!(convert_upload(&info(UploadStatus::Completed)).state, UploadState::Completed);
+        assert!(!convert_upload(&info(UploadStatus::Completed)).state.is_live());
+        assert_eq!(
+            convert_upload(&info(UploadStatus::Failed("refused".into()))).state,
+            UploadState::Failed { reason: "refused".into() }
+        );
     }
 
     #[test]

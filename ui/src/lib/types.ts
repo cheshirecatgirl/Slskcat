@@ -44,6 +44,29 @@ export type TransferState =
   | { type: "cancelled" }
   | { type: "timedOut" };
 
+export type UploadState =
+  | { type: "queued"; data: { place: number } }
+  | { type: "active" }
+  | { type: "completed" }
+  | { type: "cancelled" }
+  | { type: "failed"; data: { reason: string } };
+
+export interface Upload {
+  username: string;
+  path: string;
+  size: number;
+  sent: number;
+  state: UploadState;
+  bytesPerSec: number;
+}
+
+/** What sharing a directory would expose, as judged by the core. */
+export interface ShareVerdict {
+  allowed: boolean;
+  sensitive: boolean;
+  reason: string | null;
+}
+
 export interface SharedDirectory {
   path: string;
   files: FileEntry[];
@@ -112,6 +135,7 @@ export type CoreEvent =
   | { type: "searchHits"; data: { id: SearchId; hits: SearchHit[] } }
   | { type: "searchFinished"; data: { id: SearchId } }
   | { type: "transferUpdated"; data: { id: TransferId; state: TransferState } }
+  | { type: "uploadUpdated"; data: Upload }
   | {
       type: "browseReady";
       data: { username: string; directories: SharedDirectory[] };

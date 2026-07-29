@@ -29,12 +29,43 @@
     }
   }
 
+  /** Folders the core flagged as personal, awaiting an explicit yes. */
+  let flagged = $state<{ path: string; reason: string }[]>([]);
+
+  /**
+   * Add folders, checking each one first.
+   *
+   * The core refuses dangerous paths regardless, but asking here means a
+   * refusal is explained while the user still has the folder in mind, and a
+   * merely personal folder can be confirmed rather than silently accepted.
+   */
   async function addFolders() {
     const picked = await open({ directory: true, multiple: true });
     if (!picked || !settings) return;
-    const added = Array.isArray(picked) ? picked : [picked];
-    // A folder shared twice would be offered twice; keep the set distinct.
-    await update({ sharedDirs: [...new Set([...settings.sharedDirs, ...added])] });
+
+    const safe: string[] = [];
+    for (const path of Array.isArray(picked) ? picked : [picked]) {
+      const verdict = await core.assessShare(path);
+      if (!verdict.allowed) {
+        app.notify(`Not shared: ${verdict.reason}`, "danger");
+      } else if (verdict.sensitive) {
+        flagged = [...flagged, { path, reason: verdict.reason ?? "" }];
+      } else {
+        safe.push(path);
+      }
+    }
+    if (safe.length > 0) await share(safe);
+  }
+
+  /** Add paths to the share set, keeping it distinct. */
+  async function share(paths: string[]) {
+    if (!settings) return;
+    await update({ sharedDirs: [...new Set([...settings.sharedDirs, ...paths])] });
+  }
+
+  async function confirmFlagged(path: string) {
+    flagged = flagged.filter((f) => f.path !== path);
+    await share([path]);
   }
 
   async function removeFolder(path: string) {
@@ -80,6 +111,23 @@
       <section>
         <h3>Shared folders</h3>
         <p class="hint">Offered to other users.</p>
+
+        {#each flagged as item (item.path)}
+          <div class="flagged" role="alert">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2 1 21h22L12 2Zm0 4.5L19.5 19h-15L12 6.5ZM11 10v5h2v-5h-2Zm0 6v2h2v-2h-2Z" />
+            </svg>
+            <div class="flagged-text">
+              <span class="path selectable" title={item.path}>{item.path}</span>
+              <span class="why">{item.reason}</span>
+            </div>
+            <button class="btn small" onclick={() => confirmFlagged(item.path)}>Share anyway</button>
+            <button
+              class="btn quiet small"
+              onclick={() => (flagged = flagged.filter((f) => f.path !== item.path))}>Skip</button
+            >
+          </div>
+        {/each}
 
         {#if settings.sharedDirs.length > 0}
           <ul>
@@ -211,6 +259,40 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .flagged {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    background: var(--warn-quiet);
+    animation: flag var(--spring) both;
+  }
+  @keyframes flag {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+  .flagged svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    fill: var(--warn);
+  }
+  .flagged-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    line-height: 1.35;
+  }
+  .why {
+    font-size: 11.5px;
+    color: var(--warn);
   }
 
   .stat {

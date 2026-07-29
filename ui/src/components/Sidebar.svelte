@@ -65,8 +65,8 @@
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.path} /></svg>
         <span class="label">{item.label}</span>
-        {#if item.id === "transfers" && app.activeTransfers > 0}
-          <span class="badge num">{app.activeTransfers}</span>
+        {#if item.id === "transfers" && app.activeWork > 0}
+          <span class="badge num">{app.activeWork}</span>
         {/if}
       </button>
     {/each}

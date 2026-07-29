@@ -38,6 +38,25 @@ const bridge = () => {
       if (cmd === "plugin:event|unlisten") return null;
       if (cmd === "search") return 1;
       if (cmd === "load_settings") return { ...window.__settings };
+      if (cmd === "assess_share") {
+        // Mirrors the core's classification closely enough to drive the UI.
+        if (/(^|\/)\.|^\/etc|^\/usr|^\/$/.test(args.path)) {
+          return {
+            allowed: false,
+            sensitive: false,
+            reason: "Hidden folders can hold keys and credentials.",
+          };
+        }
+        if (/\/(Documents|Desktop|Pictures)$/.test(args.path)) {
+          return {
+            allowed: true,
+            sensitive: true,
+            reason: "This folder usually holds personal files, not music.",
+          };
+        }
+        return { allowed: true, sensitive: false, reason: null };
+      }
+      if (cmd === "plugin:dialog|open") return window.__pick ?? null;
       if (cmd === "save_settings" || cmd === "connect") {
         window.__settings = { ...window.__settings, ...args.settings, keychainAvailable: true };
         return { ...window.__settings };
@@ -163,6 +182,28 @@ const run = async () => {
     await page.waitForTimeout(500);
     await shot("4-transfers");
 
+    // 4b. Uploads — what other people are taking from you
+    await page.evaluate(() => {
+      const up = (username, path, size, sent, state, speed = 0) =>
+        window.__emit({
+          type: "uploadUpdated",
+          data: { username, path, size, sent, state, bytesPerSec: speed },
+        });
+      up("driftwood", "Music/FLAC/Talk Talk/Laughing Stock/01 Myrrhman.flac",
+         44_000_000, 29_500_000, { type: "active" }, 840_000);
+      up("kithara", "Music/FLAC/Talk Talk/Laughing Stock/02 Ascension Day.flac",
+         61_000_000, 0, { type: "queued", data: { place: 1 } });
+      up("owl_hours", "Music/Rips/Coil - Musick To Play In The Dark/03 Red Birds.flac",
+         52_000_000, 52_000_000, { type: "completed" });
+      up("sparrowfall", "Music/Rips/Broadcast - Tender Buttons/04 Corporeal.flac",
+         31_000_000, 4_100_000, { type: "failed", data: { reason: "The peer went offline." } });
+    });
+    await page.click('button[role="tab"]:has-text("Uploads")');
+    await page.waitForTimeout(500);
+    await shot("4b-uploads");
+    await page.click('button[role="tab"]:has-text("Downloads")');
+    await page.waitForTimeout(200);
+
     // 5. Rooms
     await page.evaluate(() => {
       window.__emit({
@@ -190,10 +231,33 @@ const run = async () => {
     await page.waitForTimeout(500);
     await shot("5-rooms");
 
+    // 5b. A direct-message thread
+    await page.evaluate(() => {
+      const dm = (author, body) =>
+        window.__emit({ type: "privateMessage", data: { author, body } });
+      dm("cassette_ghost", "sent you the folder, should be queued");
+      dm("cassette_ghost", "the 24bit one is the better transfer fwiw");
+    });
+    await page.waitForTimeout(300);
+    await page.click('.entry:has-text("cassette_ghost") .pick');
+    await page.waitForTimeout(200);
+    await page.fill('section input.field', "got it, thanks — grabbing now");
+    await page.waitForTimeout(400);
+    await shot("5b-direct");
+
     // 6. Settings, rendered from the persisted preferences
     await page.click('button:has-text("Settings")');
     await page.waitForTimeout(400);
     await shot("6-settings");
+
+    // 6b. The share guard: one path refused outright, one flagged for
+    // confirmation. The picker is driven through the mocked dialog command.
+    await page.evaluate(() => {
+      window.__pick = ["/home/listener/.ssh", "/home/listener/Documents"];
+    });
+    await page.click('button:has-text("Add folder…")');
+    await page.waitForTimeout(800);
+    await shot("6b-share-guard");
 
     await context.close();
   }

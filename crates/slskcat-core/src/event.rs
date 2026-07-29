@@ -1,7 +1,8 @@
 //! Everything the core reports back to the UI.
 
 use crate::model::{
-    ChatMessage, Room, SearchHit, SearchId, SharedDirectory, TransferId, TransferState, UserSummary,
+    ChatMessage, Room, SearchHit, SearchId, SharedDirectory, TransferId, TransferState, Upload,
+    UserSummary,
 };
 
 /// Why a session ended.
@@ -36,6 +37,9 @@ pub enum Event {
 
     /// A transfer appeared or changed state.
     TransferUpdated { id: TransferId, state: TransferState },
+
+    /// An upload appeared or changed state.
+    UploadUpdated(Upload),
 
     /// A peer's shared-file listing arrived.
     BrowseReady { username: String, directories: Vec<SharedDirectory> },
