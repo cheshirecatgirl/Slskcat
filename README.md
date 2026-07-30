@@ -17,7 +17,8 @@ in one process; the interface is rendered by the OS WebView.
   <img src="docs/light-5b-direct.png" width="49%" alt="Direct messages, light scheme">
 </p>
 
-> Early. Nothing has been tested against the live Soulseek network yet.
+> Early. Nothing has been run against the live Soulseek network yet —
+> [VERIFY.md](VERIFY.md) is the checklist for doing that and then publishing.
 > [RESEARCH.md](RESEARCH.md) records how the stack was chosen.
 
 ## Layout
