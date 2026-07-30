@@ -5,6 +5,12 @@ is only the part that needs your machine.
 
 **Total: about 20 minutes.** Steps 1–5 in order. Step 6 publishes.
 
+> **Want Claude to drive most of this?** Install the Claude Code CLI, clone
+> this repo, and run `claude` inside it. [CLAUDE.md](CLAUDE.md) tells a fresh
+> session what is already verified and what has never run, so it can pick up
+> from here. It can automate steps 1, 2, 4, 5 and 6; step 3 still wants your
+> eyes.
+
 ---
 
 ## Setup (2 min)
