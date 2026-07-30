@@ -64,19 +64,45 @@ const PERSONAL: &[&str] = &["documents", "desktop", "pictures", "photos", "video
 /// The user's home directory, if the environment names one.
 fn home() -> Option<PathBuf> {
     let key = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var_os(key).map(PathBuf::from).filter(|p| !p.as_os_str().is_empty())
+    std::env::var_os(key)
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
 }
 
-/// Classify a directory that is about to be shared.
+/// Classify a directory that is about to be shared, following symlinks.
 ///
-/// The check is on the path as written; it does not follow symlinks, so a link
-/// into a refused location is not caught here. That is a known limit rather
-/// than an oversight — resolving every share would need filesystem access this
-/// function deliberately avoids, and the destructive cases are all reachable
-/// by path.
+/// A share root that is a symlink is a genuine way around a path-only check:
+/// `~/Music/keys -> ~/.ssh` reads as an ordinary music folder, and the
+/// indexer's `read_dir` would follow it straight into the target. So the
+/// resolved path is judged as well as the literal one, and the stricter of the
+/// two verdicts wins.
+///
+/// Symlinks *inside* a shared tree need no handling here — the indexer skips
+/// them, because `DirEntry::metadata` does not traverse a link.
+///
+/// A path that cannot be resolved is judged on its literal form rather than
+/// refused: an unmounted drive should not silently drop a share the user
+/// configured while it was present.
 #[must_use]
 pub fn assess_share_path(path: &Path) -> ShareRisk {
-    assess_against(path, home().as_deref())
+    let home = home();
+    let literal = assess_against(path, home.as_deref());
+    if !literal.is_allowed() {
+        return literal;
+    }
+
+    match std::fs::canonicalize(path) {
+        Ok(resolved) if resolved != path => {
+            let target = assess_against(&resolved, home.as_deref());
+            // The resolved verdict only ever tightens the result.
+            if target.is_allowed() && matches!(literal, ShareRisk::Sensitive(_)) {
+                literal
+            } else {
+                target
+            }
+        }
+        _ => literal,
+    }
 }
 
 /// The classification proper, with the home directory passed in.
@@ -112,13 +138,15 @@ fn assess_against(path: &Path, home: Option<&Path>) -> ShareRisk {
 
     if let Some(home) = home {
         if path == home {
-            return ShareRisk::Refused("Sharing your whole home folder would expose everything in it.");
+            return ShareRisk::Refused(
+                "Sharing your whole home folder would expose everything in it.",
+            );
         }
         // One level below home, matched by name: ~/Documents and friends.
         if path.parent() == Some(home)
-            && path
-                .file_name()
-                .is_some_and(|name| PERSONAL.contains(&name.to_string_lossy().to_lowercase().as_str()))
+            && path.file_name().is_some_and(|name| {
+                PERSONAL.contains(&name.to_string_lossy().to_lowercase().as_str())
+            })
         {
             return ShareRisk::Sensitive("This folder usually holds personal files, not music.");
         }
@@ -161,7 +189,10 @@ mod tests {
     #[test]
     fn the_whole_home_folder_is_refused() {
         let risk = check("/home/listener");
-        assert!(!risk.is_allowed(), "sharing all of $HOME is the classic leak");
+        assert!(
+            !risk.is_allowed(),
+            "sharing all of $HOME is the classic leak"
+        );
         assert!(risk.reason().is_some());
     }
 
@@ -188,8 +219,17 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn system_folders_are_refused() {
-        for path in ["/etc", "/etc/ssl/private", "/usr/share", "/var/log", "/root"] {
-            assert!(!check(path).is_allowed(), "{path} is not the user's to share");
+        for path in [
+            "/etc",
+            "/etc/ssl/private",
+            "/usr/share",
+            "/var/log",
+            "/root",
+        ] {
+            assert!(
+                !check(path).is_allowed(),
+                "{path} is not the user's to share"
+            );
         }
     }
 
@@ -203,13 +243,54 @@ mod tests {
     fn personal_folders_are_allowed_but_flagged() {
         let risk = check("/home/listener/Documents");
         assert!(risk.is_allowed(), "the user may genuinely mean it");
-        assert!(matches!(risk, ShareRisk::Sensitive(_)), "but they should be asked");
+        assert!(
+            matches!(risk, ShareRisk::Sensitive(_)),
+            "but they should be asked"
+        );
 
         // Case should not be a way around the check.
-        assert!(matches!(check("/home/listener/desktop"), ShareRisk::Sensitive(_)));
+        assert!(matches!(
+            check("/home/listener/desktop"),
+            ShareRisk::Sensitive(_)
+        ));
         // A music folder nested under one of them is not itself the
         // conventional personal folder.
         assert_eq!(check("/home/listener/Documents/Music"), ShareRisk::Safe);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_share_root_is_judged_by_its_target() {
+        use std::os::unix::fs::symlink;
+
+        let dir = std::env::temp_dir().join(format!("slskcat-link-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // The classic bypass: a share root that looks like music but resolves
+        // into a refused location.
+        let innocent = dir.join("Music");
+        let _ = std::fs::remove_file(&innocent);
+        symlink("/etc", &innocent).unwrap();
+
+        assert_eq!(
+            assess_against(&innocent, None),
+            ShareRisk::Safe,
+            "a path-only check cannot see through the link"
+        );
+        assert!(
+            !assess_share_path(&innocent).is_allowed(),
+            "resolving the link must refuse it"
+        );
+
+        // A link to somewhere ordinary stays shareable.
+        let fine = dir.join("Rips");
+        let real = dir.join("real-music");
+        std::fs::create_dir_all(&real).unwrap();
+        let _ = std::fs::remove_file(&fine);
+        symlink(&real, &fine).unwrap();
+        assert!(assess_share_path(&fine).is_allowed());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

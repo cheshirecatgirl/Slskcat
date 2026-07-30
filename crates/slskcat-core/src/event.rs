@@ -25,38 +25,68 @@ pub enum Disconnect {
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum Event {
     /// Logged in successfully.
-    Connected { username: String },
+    Connected {
+        username: String,
+    },
     /// Login was refused, with the server's reason where it gave one.
-    LoginFailed { reason: String },
+    LoginFailed {
+        reason: String,
+    },
     Disconnected(Disconnect),
 
     /// New hits for a search. Never empty.
-    SearchHits { id: SearchId, hits: Vec<SearchHit> },
+    SearchHits {
+        id: SearchId,
+        hits: Vec<SearchHit>,
+    },
     /// A search stopped collecting, either by timing out or by being cancelled.
-    SearchFinished { id: SearchId },
+    SearchFinished {
+        id: SearchId,
+    },
 
     /// A transfer appeared or changed state.
-    TransferUpdated { id: TransferId, state: TransferState },
+    TransferUpdated {
+        id: TransferId,
+        state: TransferState,
+    },
 
     /// An upload appeared or changed state.
     UploadUpdated(Upload),
 
     /// A peer's shared-file listing arrived.
-    BrowseReady { username: String, directories: Vec<SharedDirectory> },
+    BrowseReady {
+        username: String,
+        directories: Vec<SharedDirectory>,
+    },
     /// Fresh information about a peer.
     UserUpdated(UserSummary),
 
     /// The full public room list, replacing any previous one.
     RoomList(Vec<Room>),
-    RoomJoined { room: String, users: Vec<String> },
-    RoomLeft { room: String },
-    RoomMessage { room: String, message: ChatMessage },
+    RoomJoined {
+        room: String,
+        users: Vec<String>,
+    },
+    RoomLeft {
+        room: String,
+    },
+    RoomMessage {
+        room: String,
+        message: ChatMessage,
+    },
     /// Someone entered or left a room we are in.
-    RoomPresence { room: String, username: String, joined: bool },
+    RoomPresence {
+        room: String,
+        username: String,
+        joined: bool,
+    },
     PrivateMessage(ChatMessage),
 
     /// Our own share statistics changed, as reported to the server.
-    SharesUpdated { directories: u32, files: u32 },
+    SharesUpdated {
+        directories: u32,
+        files: u32,
+    },
 
     /// Something failed in a way the user should know about but which does not
     /// end the session.

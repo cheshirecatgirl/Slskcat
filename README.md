@@ -87,8 +87,10 @@ rows.
   it flags conventionally personal folders (`~/Documents`, `~/Desktop`) for
   explicit confirmation. This is enforced in the core, not the interface, so a
   hand-edited settings file or a UI bug still cannot expose a credential
-  directory. It does not resolve symlinks — a known limit, documented in the
-  module.
+  directory. Share roots are resolved before judging, so a symlink dressed up
+  as a music folder (`~/Music/keys -> ~/.ssh`) is refused by its target;
+  symlinks *inside* a shared tree need no handling because the indexer skips
+  them outright.
 - **The password goes to the OS credential store** — Keychain, Credential
   Manager, or the D-Bus Secret Service — never to disk in the clear.
   Remembering it is opt-in. A store that cannot be reached degrades to
@@ -104,6 +106,12 @@ rows.
 - **The password is never logged.** Verified across every logging macro in the
   protocol library, which defaults to `WARN` and is raised only by setting
   `LOG_LEVEL`/`RUST_LOG` yourself.
+- **Dependencies are audited in CI.** `cargo audit` and `pnpm audit` both run
+  on every push and fail the build. Currently zero vulnerabilities.
+  `.cargo/audit.toml` ignores seventeen `unmaintained`/`unsound` advisories,
+  each listed individually with a reason — all of them Tauri's GTK3 Linux
+  bindings or build-time codegen crates, none of them ours to update. Anything
+  new breaks the build.
 
 Soulseek is a public P2P network: peers see your username, your shared file
 list, and your address when transferring. Nothing here changes that.
@@ -136,12 +144,16 @@ system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libssl-dev`,
 ```bash
 pnpm --dir ui install
 
-cargo test                        # 45 unit tests, no network needed
+cargo test                        # 46 unit tests, no network needed
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 
 cargo tauri dev
 ```
+
+`.github/workflows/ci.yml` runs the same checks on every push, in three jobs:
+Rust (fmt, clippy with warnings denied, tests), frontend (typecheck and
+bundle), and a dependency audit.
 
 ### Reviewing the interface without a desktop
 
@@ -162,11 +174,9 @@ node tools/screenshots.mjs ../docs
 - **Never tested against the live network.** Every test here is offline.
 - **Wishlist** is supported by the protocol library and not wired up.
 - `requestUserInfo` and `cancelSearch` are in the bridge and called by nothing.
-- The share guard does not follow symlinks, so a link pointing into a refused
-  location is not caught.
 - The keychain path is unexercised — it needs a real desktop session. Only the
   degradation path has been verified.
-- No CI, no packaging run (`tauri build`), no Windows `.ico`.
+- No packaging run (`tauri build`), and no Windows `.ico`.
 
 ## Known limitations
 

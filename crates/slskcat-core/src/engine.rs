@@ -63,7 +63,11 @@ impl Engine {
             .spawn(move || run(backend, &command_rx, &EventSink::new(event_tx)))
             .expect("spawning the core worker thread");
 
-        Self { commands: command_tx, events: event_rx, worker: Some(worker) }
+        Self {
+            commands: command_tx,
+            events: event_rx,
+            worker: Some(worker),
+        }
     }
 
     /// Queue a command. Returns `false` once the worker has stopped, which
@@ -104,7 +108,9 @@ impl Engine {
     /// A shareable handle for sending commands from other threads.
     #[must_use]
     pub fn commander(&self) -> Commander {
-        Commander { commands: self.commands.clone() }
+        Commander {
+            commands: self.commands.clone(),
+        }
     }
 
     /// Stop the worker and wait for it to finish.
@@ -112,7 +118,9 @@ impl Engine {
     /// Idempotent, and also run by [`Drop`], so calling it is only necessary
     /// when the caller wants to observe shutdown completing.
     pub fn shutdown(&mut self) {
-        let Some(worker) = self.worker.take() else { return };
+        let Some(worker) = self.worker.take() else {
+            return;
+        };
         // An error means the worker already stopped, which is the desired end
         // state either way, so the join still runs.
         let _ = self.commands.send(Message::Stop);
@@ -184,13 +192,19 @@ mod tests {
     #[test]
     fn commands_reach_the_backend_in_order() {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let engine = Engine::spawn(Spy { seen: Arc::clone(&seen), ..Spy::default() });
+        let engine = Engine::spawn(Spy {
+            seen: Arc::clone(&seen),
+            ..Spy::default()
+        });
 
         engine.send(Command::RequestRoomList);
         engine.send(Command::JoinRoom("nicotine".into()));
         engine.send(Command::LeaveRoom("nicotine".into()));
 
-        assert!(wait_for(|| seen.lock().unwrap().len() == 3), "commands were not all delivered");
+        assert!(
+            wait_for(|| seen.lock().unwrap().len() == 3),
+            "commands were not all delivered"
+        );
         assert_eq!(
             *seen.lock().unwrap(),
             vec![
@@ -206,7 +220,10 @@ mod tests {
         let engine = Engine::spawn(Spy::default());
         engine.send(Command::Disconnect);
 
-        let event = engine.events().recv_timeout(Duration::from_secs(5)).unwrap();
+        let event = engine
+            .events()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
         assert_eq!(event, Event::Warning("Disconnect".into()));
     }
 
@@ -233,13 +250,19 @@ mod tests {
                 Event::Warning("RequestRoomList".into()),
             ]
         );
-        assert!(engine.drain().is_empty(), "a second drain should find nothing new");
+        assert!(
+            engine.drain().is_empty(),
+            "a second drain should find nothing new"
+        );
     }
 
     #[test]
     fn the_backend_is_polled_while_idle() {
         let polls = Arc::new(AtomicUsize::new(0));
-        let _engine = Engine::spawn(Spy { polls: Arc::clone(&polls), ..Spy::default() });
+        let _engine = Engine::spawn(Spy {
+            polls: Arc::clone(&polls),
+            ..Spy::default()
+        });
 
         assert!(
             wait_for(|| polls.load(Ordering::Relaxed) >= 3),
@@ -250,20 +273,33 @@ mod tests {
     #[test]
     fn shutdown_stops_the_backend_and_is_idempotent() {
         let stopped = Arc::new(AtomicUsize::new(0));
-        let mut engine = Engine::spawn(Spy { stopped: Arc::clone(&stopped), ..Spy::default() });
+        let mut engine = Engine::spawn(Spy {
+            stopped: Arc::clone(&stopped),
+            ..Spy::default()
+        });
 
         engine.shutdown();
-        assert_eq!(stopped.load(Ordering::Relaxed), 1, "shutdown should reach the backend");
+        assert_eq!(
+            stopped.load(Ordering::Relaxed),
+            1,
+            "shutdown should reach the backend"
+        );
 
         engine.shutdown(); // must not panic or double-stop
         assert_eq!(stopped.load(Ordering::Relaxed), 1);
-        assert!(!engine.send(Command::Disconnect), "a stopped engine accepts no commands");
+        assert!(
+            !engine.send(Command::Disconnect),
+            "a stopped engine accepts no commands"
+        );
     }
 
     #[test]
     fn a_commander_sends_from_another_thread() {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let engine = Engine::spawn(Spy { seen: Arc::clone(&seen), ..Spy::default() });
+        let engine = Engine::spawn(Spy {
+            seen: Arc::clone(&seen),
+            ..Spy::default()
+        });
         let commander = engine.commander();
 
         thread::spawn(move || {
@@ -272,7 +308,10 @@ mod tests {
         .join()
         .unwrap();
 
-        assert!(wait_for(|| seen.lock().unwrap().len() == 1), "the command never arrived");
+        assert!(
+            wait_for(|| seen.lock().unwrap().len() == 1),
+            "the command never arrived"
+        );
         assert_eq!(*seen.lock().unwrap(), vec![Command::RequestRoomList]);
     }
 
@@ -287,11 +326,18 @@ mod tests {
     #[test]
     fn queued_commands_run_before_shutdown_takes_effect() {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mut engine = Engine::spawn(Spy { seen: Arc::clone(&seen), ..Spy::default() });
+        let mut engine = Engine::spawn(Spy {
+            seen: Arc::clone(&seen),
+            ..Spy::default()
+        });
 
         engine.send(Command::Connect(Box::default()));
         engine.shutdown();
 
-        assert_eq!(seen.lock().unwrap().len(), 1, "shutdown must not overtake queued work");
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            1,
+            "shutdown must not overtake queued work"
+        );
     }
 }

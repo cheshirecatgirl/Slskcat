@@ -88,11 +88,7 @@ fn start_core(app: &AppHandle) -> Commander {
 /// Saving here rather than in the interface means the stored settings always
 /// describe a configuration that was actually used to connect.
 #[tauri::command]
-fn connect(
-    app: State<'_, App>,
-    handle: AppHandle,
-    settings: Settings,
-) -> Result<Settings, String> {
+fn connect(app: State<'_, App>, handle: AppHandle, settings: Settings) -> Result<Settings, String> {
     let config = settings.to_config();
     app.send(Command::Connect(Box::new(config)))?;
     settings::save(&handle, &settings)
@@ -118,7 +114,11 @@ fn disconnect(app: State<'_, App>) -> Result<(), String> {
 /// Start a search and return the id its results will be tagged with.
 #[tauri::command]
 fn search(app: State<'_, App>, query: String) -> Result<SearchId, String> {
-    let id = app.searches.lock().map_err(|_| "Search state is poisoned.")?.next();
+    let id = app
+        .searches
+        .lock()
+        .map_err(|_| "Search state is poisoned.")?
+        .next();
     app.send(Command::Search { id, query })?;
     Ok(id)
 }
@@ -131,13 +131,12 @@ fn cancel_search(app: State<'_, App>, id: SearchId) -> Result<(), String> {
 // --- commands: transfers ---
 
 #[tauri::command]
-fn download(
-    app: State<'_, App>,
-    username: String,
-    path: String,
-    size: u64,
-) -> Result<(), String> {
-    app.send(Command::Download { username, path, size })
+fn download(app: State<'_, App>, username: String, path: String, size: u64) -> Result<(), String> {
+    app.send(Command::Download {
+        username,
+        path,
+        size,
+    })
 }
 
 #[tauri::command]
@@ -218,11 +217,7 @@ fn send_room_message(app: State<'_, App>, room: String, body: String) -> Result<
 }
 
 #[tauri::command]
-fn send_private_message(
-    app: State<'_, App>,
-    username: String,
-    body: String,
-) -> Result<(), String> {
+fn send_private_message(app: State<'_, App>, username: String, body: String) -> Result<(), String> {
     app.send(Command::SendPrivateMessage { username, body })
 }
 
@@ -248,7 +243,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let core = start_core(app.handle());
-            app.manage(App { core, searches: Mutex::new(SearchIds::new()) });
+            app.manage(App {
+                core,
+                searches: Mutex::new(SearchIds::new()),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

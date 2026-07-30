@@ -14,7 +14,9 @@ use std::time::Duration;
 /// Searches are identified by our own counter rather than by query text so
 /// that running the same query twice produces two independently cancellable
 /// searches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct SearchId(pub u64);
 
 impl fmt::Display for SearchId {
@@ -36,7 +38,10 @@ pub struct TransferId {
 impl TransferId {
     #[must_use]
     pub fn new(username: impl Into<String>, path: impl Into<String>) -> Self {
-        Self { username: username.into(), path: path.into() }
+        Self {
+            username: username.into(),
+            path: path.into(),
+        }
     }
 }
 
@@ -119,11 +124,22 @@ impl SearchHit {
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum TransferState {
     /// Waiting in the peer's queue. Carries our position when the peer says.
-    Queued { place: Option<u32> },
-    Active { transferred: u64, total: u64, bytes_per_sec: f64 },
-    Paused { transferred: u64, total: u64 },
+    Queued {
+        place: Option<u32>,
+    },
+    Active {
+        transferred: u64,
+        total: u64,
+        bytes_per_sec: f64,
+    },
+    Paused {
+        transferred: u64,
+        total: u64,
+    },
     Completed,
-    Failed { reason: Option<String> },
+    Failed {
+        reason: Option<String>,
+    },
     Cancelled,
     TimedOut,
 }
@@ -132,7 +148,10 @@ impl TransferState {
     /// Whether this state can still change on its own.
     #[must_use]
     pub const fn is_live(&self) -> bool {
-        matches!(self, Self::Queued { .. } | Self::Active { .. } | Self::Paused { .. })
+        matches!(
+            self,
+            Self::Queued { .. } | Self::Active { .. } | Self::Paused { .. }
+        )
     }
 
     /// Completion in the range 0.0..=1.0, or `None` when the size is not yet
@@ -151,9 +170,10 @@ impl TransferState {
             ratio
         };
         match *self {
-            Self::Active { transferred, total, .. } | Self::Paused { transferred, total } => {
-                Some(ratio(transferred, total))
+            Self::Active {
+                transferred, total, ..
             }
+            | Self::Paused { transferred, total } => Some(ratio(transferred, total)),
             Self::Completed => Some(1.0),
             Self::Queued { .. } => Some(0.0),
             Self::Failed { .. } | Self::Cancelled | Self::TimedOut => None,
@@ -175,7 +195,11 @@ pub struct Transfer {
 impl Transfer {
     #[must_use]
     pub fn file_name(&self) -> &str {
-        self.id.path.rsplit(['\\', '/']).next().unwrap_or(&self.id.path)
+        self.id
+            .path
+            .rsplit(['\\', '/'])
+            .next()
+            .unwrap_or(&self.id.path)
     }
 }
 
@@ -184,11 +208,15 @@ impl Transfer {
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum UploadState {
     /// Waiting for a free slot, at this 1-based place in our own queue.
-    Queued { place: u32 },
+    Queued {
+        place: u32,
+    },
     Active,
     Completed,
     Cancelled,
-    Failed { reason: String },
+    Failed {
+        reason: String,
+    },
 }
 
 impl UploadState {
@@ -288,7 +316,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            credentials: Credentials { username: String::new(), password: String::new() },
+            credentials: Credentials {
+                username: String::new(),
+                password: String::new(),
+            },
             download_dir: default_download_dir(),
             shared_dirs: Vec::new(),
             upload_slots: 2,
@@ -369,7 +400,10 @@ pub(crate) fn file_entry(path: String, size: u64, attribs: &HashMap<u32, u32>) -
     FileEntry {
         path,
         size,
-        bitrate: attribs.get(&attribute::BITRATE).copied().filter(|rate| *rate > 0),
+        bitrate: attribs
+            .get(&attribute::BITRATE)
+            .copied()
+            .filter(|rate| *rate > 0),
         duration: attribs
             .get(&attribute::DURATION)
             .copied()
@@ -395,23 +429,36 @@ mod tests {
         assert_eq!(windows.file_name(), "01 Rhubarb.flac");
         assert_eq!(windows.parent(), r"@@music\Aphex Twin\SAW II");
 
-        let unix = FileEntry { path: "music/track.mp3".into(), ..windows.clone() };
+        let unix = FileEntry {
+            path: "music/track.mp3".into(),
+            ..windows.clone()
+        };
         assert_eq!(unix.file_name(), "track.mp3");
         assert_eq!(unix.parent(), "music");
     }
 
     #[test]
     fn file_name_falls_back_to_whole_path_when_unseparated() {
-        let bare =
-            FileEntry { path: "track.mp3".into(), size: 1, bitrate: None, duration: None, vbr: false };
+        let bare = FileEntry {
+            path: "track.mp3".into(),
+            size: 1,
+            bitrate: None,
+            duration: None,
+            vbr: false,
+        };
         assert_eq!(bare.file_name(), "track.mp3");
         assert_eq!(bare.parent(), "");
     }
 
     #[test]
     fn extension_is_lowercased_and_absent_when_missing() {
-        let mut entry =
-            FileEntry { path: "a/B.FLAC".into(), size: 1, bitrate: None, duration: None, vbr: false };
+        let mut entry = FileEntry {
+            path: "a/B.FLAC".into(),
+            size: 1,
+            bitrate: None,
+            duration: None,
+            vbr: false,
+        };
         assert_eq!(entry.extension(), "flac");
         entry.path = "a/no-extension".into();
         assert_eq!(entry.extension(), "");
@@ -419,13 +466,21 @@ mod tests {
 
     #[test]
     fn zero_byte_transfer_is_complete_rather_than_dividing_by_zero() {
-        let state = TransferState::Active { transferred: 0, total: 0, bytes_per_sec: 0.0 };
+        let state = TransferState::Active {
+            transferred: 0,
+            total: 0,
+            bytes_per_sec: 0.0,
+        };
         assert_eq!(state.progress(), Some(1.0));
     }
 
     #[test]
     fn progress_is_clamped_when_a_peer_overreports() {
-        let state = TransferState::Active { transferred: 200, total: 100, bytes_per_sec: 0.0 };
+        let state = TransferState::Active {
+            transferred: 200,
+            total: 100,
+            bytes_per_sec: 0.0,
+        };
         assert_eq!(state.progress(), Some(1.0));
     }
 
@@ -451,7 +506,10 @@ mod tests {
             (attribute::VBR, 1),
         ]);
         let entry = file_entry("x/y.mp3".into(), 42, &attribs);
-        assert_eq!(entry.bitrate, None, "a zero bitrate means unknown, not 0 kbps");
+        assert_eq!(
+            entry.bitrate, None,
+            "a zero bitrate means unknown, not 0 kbps"
+        );
         assert_eq!(entry.duration, Some(Duration::from_secs(245)));
         assert!(entry.vbr);
         assert_eq!(entry.size, 42);
@@ -459,8 +517,19 @@ mod tests {
 
     #[test]
     fn hit_is_ready_only_with_a_free_slot() {
-        let hit = SearchHit { username: "a".into(), files: vec![], free_slots: 0, speed: 0 };
+        let hit = SearchHit {
+            username: "a".into(),
+            files: vec![],
+            free_slots: 0,
+            speed: 0,
+        };
         assert!(!hit.is_ready());
-        assert!(SearchHit { free_slots: 1, ..hit }.is_ready());
+        assert!(
+            SearchHit {
+                free_slots: 1,
+                ..hit
+            }
+            .is_ready()
+        );
     }
 }

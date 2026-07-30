@@ -23,9 +23,9 @@ use soulseek_rs::{
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
-use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 /// A search that is still collecting replies.
@@ -113,7 +113,9 @@ impl LiveBackend {
         // shared for the rest of the session and every other call takes `&self`.
         let mut client = Client::with_settings(settings);
         if let Err(error) = client.connect() {
-            out.emit(Event::LoginFailed { reason: format!("Could not reach the server: {error}") });
+            out.emit(Event::LoginFailed {
+                reason: format!("Could not reach the server: {error}"),
+            });
             return;
         }
 
@@ -126,7 +128,9 @@ impl LiveBackend {
                 return;
             }
             Err(error) => {
-                out.emit(Event::LoginFailed { reason: format!("Login failed: {error}") });
+                out.emit(Event::LoginFailed {
+                    reason: format!("Login failed: {error}"),
+                });
                 return;
             }
         }
@@ -202,22 +206,40 @@ impl LiveBackend {
             return;
         }
 
-        self.searches.insert(id, ActiveSearch { query, cancel, done, delivered: 0, worker });
+        self.searches.insert(
+            id,
+            ActiveSearch {
+                query,
+                cancel,
+                done,
+                delivered: 0,
+                worker,
+            },
+        );
     }
 
     /// Emit any hits that have arrived for `id` since the last poll.
     fn drain_search(&mut self, id: SearchId, out: &EventSink) {
-        let Some(client) = self.client.as_ref() else { return };
-        let Some(search) = self.searches.get_mut(&id) else { return };
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Some(search) = self.searches.get_mut(&id) else {
+            return;
+        };
 
         // A `try_` read: the collecting worker holds the lock in bursts, and
         // skipping a contended poll simply defers the hits by one tick.
-        let Some(results) = client.try_get_search_results(&search.query) else { return };
+        let Some(results) = client.try_get_search_results(&search.query) else {
+            return;
+        };
         if results.len() <= search.delivered {
             return;
         }
 
-        let hits: Vec<SearchHit> = results[search.delivered..].iter().map(convert_hit).collect();
+        let hits: Vec<SearchHit> = results[search.delivered..]
+            .iter()
+            .map(convert_hit)
+            .collect();
         search.delivered = results.len();
         if !hits.is_empty() {
             out.emit(Event::SearchHits { id, hits });
@@ -239,9 +261,15 @@ impl LiveBackend {
     }
 
     fn start_download(&mut self, username: String, path: String, size: u64, out: &EventSink) {
-        let Some(client) = self.client(out) else { return };
+        let Some(client) = self.client(out) else {
+            return;
+        };
         let id = TransferId::new(username.clone(), path.clone());
-        if self.transfers.get(&id).is_some_and(|watch| watch.state.is_live()) {
+        if self
+            .transfers
+            .get(&id)
+            .is_some_and(|watch| watch.state.is_live())
+        {
             out.warn(format!("Already downloading {}.", id.path));
             return;
         }
@@ -257,7 +285,12 @@ impl LiveBackend {
                 let state = TransferState::Queued { place: None };
                 self.transfers.insert(
                     id.clone(),
-                    TransferWatch { updates, size, destination, state: state.clone() },
+                    TransferWatch {
+                        updates,
+                        size,
+                        destination,
+                        state: state.clone(),
+                    },
                 );
                 out.emit(Event::TransferUpdated { id, state });
             }
@@ -319,12 +352,21 @@ impl LiveBackend {
     /// Forward every upload the library has news about.
     fn drain_uploads(client: &Client, out: &EventSink) {
         out.emit_all(
-            client.take_upload_events().iter().map(convert_upload).map(Event::UploadUpdated),
+            client
+                .take_upload_events()
+                .iter()
+                .map(convert_upload)
+                .map(Event::UploadUpdated),
         );
     }
 
     fn drain_rooms(client: &Client, out: &EventSink) {
-        out.emit_all(client.take_room_events().into_iter().map(convert_room_event));
+        out.emit_all(
+            client
+                .take_room_events()
+                .into_iter()
+                .map(convert_room_event),
+        );
         out.emit_all(client.take_private_messages().into_iter().map(|message| {
             Event::PrivateMessage(ChatMessage {
                 author: message.username().to_owned(),
@@ -342,11 +384,16 @@ impl LiveBackend {
         if let Some(watch) = self.transfers.get_mut(&id) {
             watch.state = TransferState::Cancelled;
         }
-        out.emit(Event::TransferUpdated { id, state: TransferState::Cancelled });
+        out.emit(Event::TransferUpdated {
+            id,
+            state: TransferState::Cancelled,
+        });
     }
 
     fn browse(&mut self, username: String, out: &EventSink) {
-        let Some(client) = self.client(out) else { return };
+        let Some(client) = self.client(out) else {
+            return;
+        };
         match client.browse_user(&username) {
             Ok(()) => {
                 if !self.pending_browses.contains(&username) {
@@ -394,7 +441,10 @@ impl LiveBackend {
         let counts = client.shared_counts();
         if self.shares != Some(counts) {
             self.shares = Some(counts);
-            out.emit(Event::SharesUpdated { directories: counts.0, files: counts.1 });
+            out.emit(Event::SharesUpdated {
+                directories: counts.0,
+                files: counts.1,
+            });
         }
     }
 }
@@ -408,7 +458,11 @@ impl Backend for LiveBackend {
             Command::Search { id, query } => self.start_search(id, query, out),
             Command::CancelSearch(id) => self.finish_search(id, out),
 
-            Command::Download { username, path, size } => {
+            Command::Download {
+                username,
+                path,
+                size,
+            } => {
                 self.start_download(username, path, size, out);
             }
             Command::PauseTransfer(id) => {
@@ -490,7 +544,9 @@ impl Backend for LiveBackend {
     }
 
     fn poll(&mut self, out: &EventSink) {
-        let Some(client) = self.client.clone() else { return };
+        let Some(client) = self.client.clone() else {
+            return;
+        };
 
         if let Some(loss) = client.session_loss() {
             let reason = match loss {
@@ -545,18 +601,26 @@ fn convert_hit(result: &SearchResult) -> SearchHit {
 fn convert_status(status: &DownloadStatus) -> TransferState {
     match *status {
         DownloadStatus::Queued => TransferState::Queued { place: None },
-        DownloadStatus::InProgress { bytes_downloaded, total_bytes, speed_bytes_per_sec } => {
-            TransferState::Active {
-                transferred: bytes_downloaded,
-                total: total_bytes,
-                bytes_per_sec: speed_bytes_per_sec,
-            }
-        }
-        DownloadStatus::Paused { bytes_downloaded, total_bytes } => {
-            TransferState::Paused { transferred: bytes_downloaded, total: total_bytes }
-        }
+        DownloadStatus::InProgress {
+            bytes_downloaded,
+            total_bytes,
+            speed_bytes_per_sec,
+        } => TransferState::Active {
+            transferred: bytes_downloaded,
+            total: total_bytes,
+            bytes_per_sec: speed_bytes_per_sec,
+        },
+        DownloadStatus::Paused {
+            bytes_downloaded,
+            total_bytes,
+        } => TransferState::Paused {
+            transferred: bytes_downloaded,
+            total: total_bytes,
+        },
         DownloadStatus::Completed => TransferState::Completed,
-        DownloadStatus::Failed(ref reason) => TransferState::Failed { reason: reason.clone() },
+        DownloadStatus::Failed(ref reason) => TransferState::Failed {
+            reason: reason.clone(),
+        },
         DownloadStatus::TimedOut => TransferState::TimedOut,
     }
 }
@@ -572,7 +636,9 @@ fn convert_upload(info: &UploadInfo) -> Upload {
             UploadStatus::InProgress => UploadState::Active,
             UploadStatus::Completed => UploadState::Completed,
             UploadStatus::Cancelled => UploadState::Cancelled,
-            UploadStatus::Failed(ref reason) => UploadState::Failed { reason: reason.clone() },
+            UploadStatus::Failed(ref reason) => UploadState::Failed {
+                reason: reason.clone(),
+            },
         },
         bytes_per_sec: info.speed_bytes_per_sec,
     }
@@ -583,21 +649,35 @@ fn convert_room_event(event: RoomEvent) -> Event {
         RoomEvent::List(rooms) => Event::RoomList(
             rooms
                 .into_iter()
-                .map(|room| Room { name: room.name, user_count: room.user_count })
+                .map(|room| Room {
+                    name: room.name,
+                    user_count: room.user_count,
+                })
                 .collect(),
         ),
         RoomEvent::Joined { room, users } => Event::RoomJoined { room, users },
         RoomEvent::Left { room } => Event::RoomLeft { room },
-        RoomEvent::Message { room, username, message } => Event::RoomMessage {
+        RoomEvent::Message {
             room,
-            message: ChatMessage { author: username, body: message },
+            username,
+            message,
+        } => Event::RoomMessage {
+            room,
+            message: ChatMessage {
+                author: username,
+                body: message,
+            },
         },
-        RoomEvent::UserJoined { room, username } => {
-            Event::RoomPresence { room, username, joined: true }
-        }
-        RoomEvent::UserLeft { room, username } => {
-            Event::RoomPresence { room, username, joined: false }
-        }
+        RoomEvent::UserJoined { room, username } => Event::RoomPresence {
+            room,
+            username,
+            joined: true,
+        },
+        RoomEvent::UserLeft { room, username } => Event::RoomPresence {
+            room,
+            username,
+            joined: false,
+        },
     }
 }
 
@@ -662,10 +742,19 @@ mod tests {
         let (out, rx) = sink();
         let mut backend = LiveBackend::new();
 
-        backend.execute(Command::Search { id: SearchId(1), query: "boards".into() }, &out);
+        backend.execute(
+            Command::Search {
+                id: SearchId(1),
+                query: "boards".into(),
+            },
+            &out,
+        );
 
         assert!(matches!(rx.try_recv(), Ok(Event::Warning(_))));
-        assert_eq!(rx.try_recv().unwrap(), Event::SearchFinished { id: SearchId(1) });
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            Event::SearchFinished { id: SearchId(1) }
+        );
         assert!(
             backend.searches.is_empty(),
             "a search that never started must not be left registered"
@@ -677,7 +766,10 @@ mod tests {
         let (out, rx) = sink();
         let mut backend = LiveBackend::new();
         backend.poll(&out);
-        assert!(rx.try_recv().is_err(), "an idle disconnected backend should stay silent");
+        assert!(
+            rx.try_recv().is_err(),
+            "an idle disconnected backend should stay silent"
+        );
     }
 
     #[test]
@@ -688,10 +780,16 @@ mod tests {
 
         backend.execute(Command::CancelTransfer(id.clone()), &out);
 
-        assert!(matches!(rx.try_recv(), Ok(Event::Warning(_))), "warns about no connection");
+        assert!(
+            matches!(rx.try_recv(), Ok(Event::Warning(_))),
+            "warns about no connection"
+        );
         assert_eq!(
             rx.try_recv().unwrap(),
-            Event::TransferUpdated { id, state: TransferState::Cancelled }
+            Event::TransferUpdated {
+                id,
+                state: TransferState::Cancelled
+            }
         );
     }
 
@@ -699,7 +797,10 @@ mod tests {
     fn an_empty_download_directory_is_repaired() {
         // Kept free of `connect`, which would dial the real Soulseek server
         // and make this a slow, network-dependent test.
-        let blank = Config { download_dir: PathBuf::new(), ..Config::default() };
+        let blank = Config {
+            download_dir: PathBuf::new(),
+            ..Config::default()
+        };
         let fixed = blank.normalized();
 
         assert!(
@@ -736,10 +837,20 @@ mod tests {
 
     #[test]
     fn zero_upload_slots_and_timeout_are_repaired() {
-        let odd = Config { upload_slots: 0, search_timeout: Duration::ZERO, ..Config::default() }
-            .normalized();
-        assert_eq!(odd.upload_slots, 1, "serving zero uploads would stall every peer");
-        assert!(!odd.search_timeout.is_zero(), "a zero search window finds nothing");
+        let odd = Config {
+            upload_slots: 0,
+            search_timeout: Duration::ZERO,
+            ..Config::default()
+        }
+        .normalized();
+        assert_eq!(
+            odd.upload_slots, 1,
+            "serving zero uploads would stall every peer"
+        );
+        assert!(
+            !odd.search_timeout.is_zero(),
+            "a zero search window finds nothing"
+        );
     }
 
     #[test]
@@ -750,14 +861,26 @@ mod tests {
                 total_bytes: 200,
                 speed_bytes_per_sec: 1024.0,
             }),
-            TransferState::Active { transferred: 50, total: 200, bytes_per_sec: 1024.0 }
+            TransferState::Active {
+                transferred: 50,
+                total: 200,
+                bytes_per_sec: 1024.0
+            }
         );
-        assert_eq!(convert_status(&DownloadStatus::Completed), TransferState::Completed);
+        assert_eq!(
+            convert_status(&DownloadStatus::Completed),
+            TransferState::Completed
+        );
         assert_eq!(
             convert_status(&DownloadStatus::Failed(Some("refused".into()))),
-            TransferState::Failed { reason: Some("refused".into()) }
+            TransferState::Failed {
+                reason: Some("refused".into())
+            }
         );
-        assert_eq!(convert_status(&DownloadStatus::TimedOut), TransferState::TimedOut);
+        assert_eq!(
+            convert_status(&DownloadStatus::TimedOut),
+            TransferState::TimedOut
+        );
     }
 
     #[test]
@@ -781,7 +904,10 @@ mod tests {
         assert_eq!(hit.files.len(), 1);
         assert_eq!(hit.files[0].file_name(), "02 track.mp3");
         assert_eq!(hit.files[0].bitrate, Some(320));
-        assert_eq!(hit.files[0].duration, Some(std::time::Duration::from_secs(210)));
+        assert_eq!(
+            hit.files[0].duration,
+            Some(std::time::Duration::from_secs(210))
+        );
     }
 
     #[test]
@@ -800,12 +926,24 @@ mod tests {
         assert_eq!(queued.sent, 40);
         assert!(queued.state.is_live());
 
-        assert_eq!(convert_upload(&info(UploadStatus::InProgress)).state, UploadState::Active);
-        assert_eq!(convert_upload(&info(UploadStatus::Completed)).state, UploadState::Completed);
-        assert!(!convert_upload(&info(UploadStatus::Completed)).state.is_live());
+        assert_eq!(
+            convert_upload(&info(UploadStatus::InProgress)).state,
+            UploadState::Active
+        );
+        assert_eq!(
+            convert_upload(&info(UploadStatus::Completed)).state,
+            UploadState::Completed
+        );
+        assert!(
+            !convert_upload(&info(UploadStatus::Completed))
+                .state
+                .is_live()
+        );
         assert_eq!(
             convert_upload(&info(UploadStatus::Failed("refused".into()))).state,
-            UploadState::Failed { reason: "refused".into() }
+            UploadState::Failed {
+                reason: "refused".into()
+            }
         );
     }
 
@@ -816,7 +954,11 @@ mod tests {
                 room: "nicotine".into(),
                 username: "peer".into(),
             }),
-            Event::RoomPresence { room: "nicotine".into(), username: "peer".into(), joined: false }
+            Event::RoomPresence {
+                room: "nicotine".into(),
+                username: "peer".into(),
+                joined: false
+            }
         );
         assert_eq!(
             convert_room_event(RoomEvent::Message {
@@ -826,7 +968,10 @@ mod tests {
             }),
             Event::RoomMessage {
                 room: "nicotine".into(),
-                message: ChatMessage { author: "peer".into(), body: "hello".into() },
+                message: ChatMessage {
+                    author: "peer".into(),
+                    body: "hello".into()
+                },
             }
         );
     }

@@ -16,12 +16,19 @@ pub enum Command {
     Disconnect,
 
     /// Start a search. Hits stream back tagged with `id`.
-    Search { id: SearchId, query: String },
+    Search {
+        id: SearchId,
+        query: String,
+    },
     /// Stop collecting for a search. Hits already delivered stay valid.
     CancelSearch(SearchId),
 
     /// Queue a download from a peer.
-    Download { username: String, path: String, size: u64 },
+    Download {
+        username: String,
+        path: String,
+        size: u64,
+    },
     PauseTransfer(TransferId),
     ResumeTransfer(TransferId),
     CancelTransfer(TransferId),
@@ -38,8 +45,14 @@ pub enum Command {
     RequestRoomList,
     JoinRoom(String),
     LeaveRoom(String),
-    SendRoomMessage { room: String, body: String },
-    SendPrivateMessage { username: String, body: String },
+    SendRoomMessage {
+        room: String,
+        body: String,
+    },
+    SendPrivateMessage {
+        username: String,
+        body: String,
+    },
 
     /// Replace the set of shared directories.
     SetSharedDirs(Vec<PathBuf>),
@@ -75,6 +88,9 @@ mod tests {
     fn search_ids_never_repeat() {
         let mut ids = SearchIds::new();
         let issued: Vec<_> = (0..4).map(|_| ids.next()).collect();
-        assert_eq!(issued, vec![SearchId(0), SearchId(1), SearchId(2), SearchId(3)]);
+        assert_eq!(
+            issued,
+            vec![SearchId(0), SearchId(1), SearchId(2), SearchId(3)]
+        );
     }
 }

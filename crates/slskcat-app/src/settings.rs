@@ -108,7 +108,9 @@ fn path(app: &AppHandle) -> Result<PathBuf, String> {
 fn restrict(path: &std::path::Path) {
     use std::os::unix::fs::PermissionsExt;
 
-    let Ok(metadata) = std::fs::metadata(path) else { return };
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return;
+    };
     let mode = if metadata.is_dir() { 0o700 } else { 0o600 };
     let mut permissions = metadata.permissions();
     if permissions.mode() & 0o777 != mode {
@@ -152,7 +154,10 @@ fn write_password(username: &str, password: &str, remember: bool) -> bool {
     } else {
         // Forgetting is the point here, so an entry that was never there is
         // the desired end state rather than an error.
-        matches!(entry.delete_credential(), Ok(()) | Err(keyring::Error::NoEntry))
+        matches!(
+            entry.delete_credential(),
+            Ok(()) | Err(keyring::Error::NoEntry)
+        )
     }
 }
 
@@ -200,7 +205,11 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
         .map_err(|error| format!("Could not write {}: {error}", file.display()))?;
     restrict(&file);
 
-    let stored = write_password(&settings.username, &settings.password, settings.remember_password);
+    let stored = write_password(
+        &settings.username,
+        &settings.password,
+        settings.remember_password,
+    );
 
     let mut saved = settings.clone();
     saved.keychain_available = stored || !settings.remember_password;
@@ -220,7 +229,10 @@ mod tests {
             ..Settings::default()
         };
         let json = serde_json::to_string(&settings).unwrap();
-        assert!(!json.contains("hunter2"), "the password must not reach disk: {json}");
+        assert!(
+            !json.contains("hunter2"),
+            "the password must not reach disk: {json}"
+        );
         assert!(json.contains("listener"), "the username should be stored");
     }
 
@@ -237,10 +249,12 @@ mod tests {
         restrict(&dir);
         restrict(&file);
 
-        let mode = |p: &std::path::Path| {
-            std::fs::metadata(p).unwrap().permissions().mode() & 0o777
-        };
-        assert_eq!(mode(&file), 0o600, "the settings file must not be group- or world-readable");
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            mode(&file),
+            0o600,
+            "the settings file must not be group- or world-readable"
+        );
         assert_eq!(mode(&dir), 0o700, "nor the directory holding it");
 
         std::fs::remove_dir_all(&dir).ok();
@@ -257,7 +271,10 @@ mod tests {
 
     #[test]
     fn a_blank_download_directory_is_repaired_on_the_way_to_a_config() {
-        let settings = Settings { download_dir: PathBuf::new(), ..Settings::default() };
+        let settings = Settings {
+            download_dir: PathBuf::new(),
+            ..Settings::default()
+        };
         assert!(
             !settings.to_config().download_dir.as_os_str().is_empty(),
             "downloads must never be pointed at an empty path"

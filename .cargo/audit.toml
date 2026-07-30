@@ -1,0 +1,39 @@
+# cargo-audit configuration.
+#
+# The build must fail on any *vulnerability*, and on any advisory not listed
+# below. The ignores here are all `unmaintained` or `unsound` notices from
+# Tauri's Linux dependency tree, which this project does not choose and cannot
+# update independently — Tauri v2 still binds GTK3, whose Rust bindings are
+# deprecated wholesale in favour of GTK4.
+#
+# Each entry is a deliberate, reviewable decision. Anything new breaks CI,
+# which is the point.
+
+[advisories]
+ignore = [
+    # GTK3 / GDK / ATK Rust bindings: deprecated as a set, pulled in by
+    # tauri -> gtk. Nothing to upgrade to until Tauri moves to GTK4.
+    "RUSTSEC-2024-0411", # gtk
+    "RUSTSEC-2024-0412", # gtk3-macros
+    "RUSTSEC-2024-0413", # gtk-sys
+    "RUSTSEC-2024-0414", # gdk
+    "RUSTSEC-2024-0415", # gdk-sys
+    "RUSTSEC-2024-0416", # gdkwayland-sys
+    "RUSTSEC-2024-0417", # gdkx11
+    "RUSTSEC-2024-0418", # gdkx11-sys
+    "RUSTSEC-2024-0419", # atk
+    "RUSTSEC-2024-0420", # atk-sys
+
+    # Unsoundness in glib's VariantStrIter. Reached only through GTK, which
+    # this application never drives directly.
+    "RUSTSEC-2024-0429", # glib
+
+    # Build-time only: proc-macro-error and the unic-* character-property
+    # crates, via Tauri's codegen. Not present in the shipped binary.
+    "RUSTSEC-2024-0370", # proc-macro-error
+    "RUSTSEC-2025-0075", # unic-char-property
+    "RUSTSEC-2025-0080", # unic-char-range
+    "RUSTSEC-2025-0081", # unic-common
+    "RUSTSEC-2025-0098", # unic-ucd-version
+    "RUSTSEC-2025-0100", # unic-ucd-ident
+]
