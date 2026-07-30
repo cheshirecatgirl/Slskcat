@@ -1,0 +1,81 @@
+name: Release
+
+# Bundles cannot be cross-built: each installer needs its own operating
+# system. This is the only way the Windows and macOS packages get verified at
+# all, since they cannot be produced from Linux.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (deb, rpm, AppImage)
+            os: ubuntu-24.04
+            bundles: deb,rpm,appimage
+          - name: Windows (msi, nsis)
+            os: windows-latest
+            bundles: msi,nsis
+          - name: macOS Apple silicon (dmg)
+            os: macos-14
+            bundles: dmg
+            target: aarch64-apple-darwin
+          - name: macOS Intel (dmg)
+            os: macos-13
+            bundles: dmg
+            target: x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.target }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: ui
+
+      # `tauri build` runs the frontend build itself via beforeBuildCommand.
+      - name: Bundle
+        run: cargo install tauri-cli --version "^2" --locked && cargo tauri build --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.target || 'native' }}
+          if-no-files-found: error
+          path: |
+            target/release/bundle/**/*.deb
+            target/release/bundle/**/*.rpm
+            target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.msi
+            target/release/bundle/**/*-setup.exe
+            target/release/bundle/**/*.dmg
+            target/*/release/bundle/**/*.dmg

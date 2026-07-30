@@ -27,6 +27,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 /// A search that is still collecting replies.
 struct ActiveSearch {
@@ -39,6 +40,15 @@ struct ActiveSearch {
     /// that polling emits only the new ones.
     delivered: usize,
     worker: Option<JoinHandle<()>>,
+}
+
+/// A standing wish, re-sent on the interval the server dictates.
+struct Wish {
+    /// When it was last put on the wire, or `None` if never.
+    sent: Option<Instant>,
+    /// Hits already forwarded since the last send. Re-sending replaces the
+    /// library's result bucket, so this resets with it.
+    delivered: usize,
 }
 
 /// A download whose progress is arriving on a channel.
@@ -68,6 +78,11 @@ pub struct LiveBackend {
     watched_users: HashMap<String, UserSummary>,
     /// Last reported share counts, so an unchanged count stays quiet.
     shares: Option<(u32, u32)>,
+    /// Standing wishes, keyed by query — the same key the library files their
+    /// results under.
+    wishes: HashMap<String, Wish>,
+    /// Last interval announced to the interface, so it is sent only on change.
+    wishlist_interval: Option<Duration>,
 }
 
 impl LiveBackend {
@@ -154,6 +169,15 @@ impl LiveBackend {
         self.pending_browses.clear();
         self.watched_users.clear();
         self.shares = None;
+        self.wishlist_interval = None;
+        // The wishes themselves survive a disconnect, but nothing has been
+        // sent on the new session, so each is due again.
+        for wish in self.wishes.values_mut() {
+            *wish = Wish {
+                sent: None,
+                delivered: 0,
+            };
+        }
         if self.client.take().is_some() {
             out.emit(Event::Disconnected(reason));
         }
@@ -264,6 +288,69 @@ impl LiveBackend {
                 let _ = worker.join();
             }
             out.emit(Event::SearchFinished { id });
+        }
+    }
+
+    /// Replace the wish set, keeping the progress of wishes that survive.
+    ///
+    /// A wish that is still present must not be re-sent early: the server
+    /// rate-limits wishlist searches and answers an impatient one with
+    /// nothing.
+    fn set_wishlist(&mut self, queries: Vec<String>) {
+        let mut next = HashMap::with_capacity(queries.len());
+        for query in queries {
+            let existing = self.wishes.remove(&query);
+            next.insert(
+                query,
+                existing.unwrap_or(Wish {
+                    sent: None,
+                    delivered: 0,
+                }),
+            );
+        }
+        self.wishes = next;
+    }
+
+    /// Send any wish that is due, and forward whatever the sent ones found.
+    fn drain_wishes(&mut self, client: &Client, out: &EventSink) {
+        let interval = client.wishlist_interval();
+        if self.wishlist_interval != Some(interval) {
+            self.wishlist_interval = Some(interval);
+            out.emit(Event::WishlistInterval {
+                seconds: interval.as_secs(),
+            });
+        }
+
+        for (query, wish) in &mut self.wishes {
+            let due = wish.sent.is_none_or(|sent| sent.elapsed() >= interval);
+            if due {
+                match client.start_wishlist_search(query) {
+                    Ok(()) => {
+                        wish.sent = Some(Instant::now());
+                        // The library files a fresh, empty bucket per send.
+                        wish.delivered = 0;
+                    }
+                    Err(error) => {
+                        out.warn(format!("Could not re-check “{query}”: {error}"));
+                        continue;
+                    }
+                }
+            }
+
+            let Some(results) = client.try_get_search_results(query) else {
+                continue;
+            };
+            if results.len() <= wish.delivered {
+                continue;
+            }
+            let hits: Vec<SearchHit> = results[wish.delivered..].iter().map(convert_hit).collect();
+            wish.delivered = results.len();
+            if !hits.is_empty() {
+                out.emit(Event::WishlistHits {
+                    query: query.clone(),
+                    hits,
+                });
+            }
         }
     }
 
@@ -497,6 +584,7 @@ impl Backend for LiveBackend {
 
             Command::Search { id, query } => self.start_search(id, query, out),
             Command::CancelSearch(id) => self.finish_search(id, out),
+            Command::SetWishlist(queries) => self.set_wishlist(queries),
 
             Command::Download {
                 username,
@@ -608,6 +696,7 @@ impl Backend for LiveBackend {
         Self::drain_rooms(&client, out);
         self.drain_browses(&client, out);
         self.drain_users(&client, out);
+        self.drain_wishes(&client, out);
         self.report_shares(&client, out);
     }
 
@@ -942,6 +1031,93 @@ mod tests {
         assert_eq!(
             hit.files[0].duration,
             Some(std::time::Duration::from_secs(210))
+        );
+    }
+
+    #[test]
+    fn setting_the_wishlist_keeps_progress_for_wishes_that_survive() {
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+
+        backend.execute(
+            Command::SetWishlist(vec!["boards of canada".into(), "coil".into()]),
+            &out,
+        );
+        // Pretend the first wish has been sent and has delivered hits.
+        let sent_at = Instant::now();
+        let wish = backend.wishes.get_mut("boards of canada").unwrap();
+        wish.sent = Some(sent_at);
+        wish.delivered = 7;
+
+        // Re-stating the set, dropping one and adding another.
+        backend.execute(
+            Command::SetWishlist(vec!["boards of canada".into(), "aphex".into()]),
+            &out,
+        );
+
+        let kept = backend
+            .wishes
+            .get("boards of canada")
+            .expect("a surviving wish stays");
+        assert_eq!(
+            kept.sent,
+            Some(sent_at),
+            "it must not become due again immediately"
+        );
+        assert_eq!(kept.delivered, 7, "nor re-deliver hits already seen");
+        assert!(
+            backend.wishes.contains_key("aphex"),
+            "the new wish is registered"
+        );
+        assert!(
+            !backend.wishes.contains_key("coil"),
+            "the dropped wish is gone"
+        );
+        assert_eq!(backend.wishes.len(), 2);
+    }
+
+    #[test]
+    fn a_new_wish_is_due_immediately_and_a_just_sent_one_is_not() {
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+        backend.execute(
+            Command::SetWishlist(vec!["fresh".into(), "recent".into()]),
+            &out,
+        );
+        backend.wishes.get_mut("recent").unwrap().sent = Some(Instant::now());
+
+        let interval = Duration::from_secs(600);
+        let due = |wish: &Wish| wish.sent.is_none_or(|sent| sent.elapsed() >= interval);
+
+        assert!(
+            due(&backend.wishes["fresh"]),
+            "a wish never sent should go out at once"
+        );
+        assert!(
+            !due(&backend.wishes["recent"]),
+            "the server rate-limits wishes and answers an early one with nothing"
+        );
+    }
+
+    #[test]
+    fn reconnecting_makes_every_wish_due_again() {
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+        backend.execute(Command::SetWishlist(vec!["coil".into()]), &out);
+        let wish = backend.wishes.get_mut("coil").unwrap();
+        wish.sent = Some(Instant::now());
+        wish.delivered = 3;
+
+        backend.disconnect(Disconnect::Requested, &out);
+
+        let wish = &backend.wishes["coil"];
+        assert!(
+            wish.sent.is_none(),
+            "nothing has been sent on the new session"
+        );
+        assert_eq!(
+            wish.delivered, 0,
+            "and the library's result bucket is gone with it"
         );
     }
 

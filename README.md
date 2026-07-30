@@ -103,6 +103,10 @@ rows.
   `dialog:allow-open`, nothing more.
 - **No telemetry, no analytics, no update pings.** The only network traffic is
   Soulseek itself.
+- **The credential-store round trip is tested**, not just claimed: store,
+  read, forget, and read-again-empty, against a real `gnome-keyring`. Those
+  tests are `#[ignore]`d because CI has no session keyring — the doc comment on
+  them gives the `dbus-run-session` command to run them.
 - **The password is never logged.** Verified across every logging macro in the
   protocol library, which defaults to `WARN` and is raised only by setting
   `LOG_LEVEL`/`RUST_LOG` yourself.
@@ -122,10 +126,12 @@ The layout follows Arc: the window is a coloured field, the content floats on
 it as one rounded canvas, and navigation lives entirely in the sidebar. No top
 chrome.
 
-- Each section owns an accent — indigo for search, teal for transfers, amber
-  for browse, rose for rooms — and the field tints to match.
+- Each section owns an accent — indigo for search, blue for wishlist, teal for
+  transfers, amber for browse, rose for rooms — and the field tints to match.
 - ⌘K opens the command bar. It is search-first: type anything and the top
   action runs it against the network.
+- Wishlist is its own section: standing searches the server re-runs on the
+  interval it dictates, so hits accumulate while you are elsewhere.
 - Transfers are two tabs, downloads and uploads, given equal weight — uploads
   are what other people see of you. Upload rows fill from the right, so
   direction reads before the text does.
@@ -144,7 +150,7 @@ system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libssl-dev`,
 ```bash
 pnpm --dir ui install
 
-cargo test                        # 49 unit tests, no network needed
+cargo test                        # 54 tests + 2 keyring-gated
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 
@@ -162,6 +168,23 @@ or verified from Linux.
 Rust (fmt, clippy with warnings denied, tests), frontend (typecheck and
 bundle), and a dependency audit.
 
+### Checking it against the live network
+
+Nothing in the test suite touches the network, so this is the only thing that
+can tell you whether the protocol integration actually works. It drives the
+same `Engine` the application does, so a pass means the core works, not merely
+that the library does. Credentials are read from the environment and never
+printed or stored:
+
+```bash
+SLSKCAT_USER=yourname SLSKCAT_PASS=yourpassword   cargo run -p slskcat-core --example smoke
+```
+
+It checks sign-in, the room list, streaming search hits, browsing a peer and
+fetching their details, then exits non-zero if any step failed.
+`SLSKCAT_DOWNLOAD=1` also queues the smallest hit and waits for real bytes;
+`SLSKCAT_QUERY` and `SLSKCAT_TIMEOUT` tune the rest.
+
 ### Reviewing the interface without a desktop
 
 `ui/tools/screenshots.mjs` renders the built interface in headless Chromium
@@ -178,13 +201,12 @@ node tools/screenshots.mjs ../docs
 
 ## Not done yet
 
-- **Never tested against the live network.** Every test here is offline.
-- **Wishlist** is supported by the protocol library and not wired up.
-- The keychain path is unexercised — it needs a real desktop session. Only the
-  degradation path has been verified.
-- Only the Linux `.deb` bundle has actually been built. `rpm` and `appimage`
-  need tooling not present here; `msi`/`nsis` and `dmg`/`app` need their own
-  operating systems.
+- **Never run against the live network.** Every test here is offline, and this
+  environment cannot reach the Soulseek ports at all. `examples/smoke.rs`
+  exists to close this, but somebody has to run it.
+- Only the Linux `.deb` bundle has been built here. `.github/workflows/release.yml`
+  builds `rpm`, `AppImage`, `msi`, NSIS and `dmg` on their native runners, but
+  it has not run yet — pushing a `v*` tag is what verifies it.
 
 ## Known limitations
 

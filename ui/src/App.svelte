@@ -8,6 +8,7 @@
   import CommandBar from "./components/CommandBar.svelte";
   import ConnectView from "./components/ConnectView.svelte";
   import SearchView from "./components/SearchView.svelte";
+  import WishlistView from "./components/WishlistView.svelte";
   import TransfersView from "./components/TransfersView.svelte";
   import BrowseView from "./components/BrowseView.svelte";
   import RoomsView from "./components/RoomsView.svelte";
@@ -61,6 +62,8 @@
       <ConnectView />
     {:else if section === "search"}
       <SearchView onCommand={() => (palette = true)} />
+    {:else if section === "wishlist"}
+      <WishlistView />
     {:else if section === "transfers"}
       <TransfersView />
     {:else if section === "browse"}

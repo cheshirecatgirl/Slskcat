@@ -23,6 +23,12 @@ pub enum Command {
     /// Stop collecting for a search. Hits already delivered stay valid.
     CancelSearch(SearchId),
 
+    /// Replace the standing wishlist.
+    ///
+    /// A wish is a search the server re-runs on its own schedule, so the set
+    /// is stated whole rather than added to one at a time.
+    SetWishlist(Vec<String>),
+
     /// Queue a download from a peer.
     Download {
         username: String,

@@ -1,2 +1,8 @@
 /** The top-level sections the sidebar switches between. */
-export type Section = "search" | "transfers" | "browse" | "rooms" | "settings";
+export type Section =
+  | "search"
+  | "wishlist"
+  | "transfers"
+  | "browse"
+  | "rooms"
+  | "settings";

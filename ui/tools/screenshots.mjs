@@ -38,6 +38,7 @@ const bridge = () => {
       if (cmd === "plugin:event|unlisten") return null;
       if (cmd === "search") return 1;
       if (cmd === "load_settings") return { ...window.__settings };
+      if (cmd === "set_wishlist") return null;
       if (cmd === "assess_share") {
         // Mirrors the core's classification closely enough to drive the UI.
         if (/(^|\/)\.|^\/etc|^\/usr|^\/$/.test(args.path)) {
@@ -74,6 +75,7 @@ const bridge = () => {
     sharedDirs: ["/home/listener/Music/FLAC", "/home/listener/Music/Rips"],
     uploadSlots: 3,
     searchTimeoutSecs: 12,
+    wishlist: ["boards of canada — geogaddi vinyl rip", "coil musick to play in the dark 2"],
     keychainAvailable: true,
   };
 
@@ -155,6 +157,35 @@ const run = async () => {
     await shot("3-palette");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
+
+    // 3b. Wishlist: standing searches the server re-runs
+    await page.evaluate(() => {
+      window.__emit({ type: "wishlistInterval", data: { seconds: 720 } });
+      window.__emit({
+        type: "wishlistHits",
+        data: {
+          query: "boards of canada — geogaddi vinyl rip",
+          hits: [
+            {
+              username: "owl_hours",
+              freeSlots: 1,
+              speed: 1_050_000,
+              files: [
+                { path: "@@rips/Boards of Canada - Geogaddi (2002, vinyl)/A1 Ready Lets Go.flac",
+                  size: 24_100_000, bitrate: 1411, duration: 98, vbr: false },
+                { path: "@@rips/Boards of Canada - Geogaddi (2002, vinyl)/A2 Music Is Math.flac",
+                  size: 41_800_000, bitrate: 1411, duration: 313, vbr: false },
+              ],
+            },
+          ],
+        },
+      });
+    });
+    await page.click('button:has-text("Wishlist")');
+    await page.waitForTimeout(300);
+    await page.click('.line:has-text("geogaddi")');
+    await page.waitForTimeout(400);
+    await shot("3b-wishlist");
 
     // 4. Transfers, mid-flight
     await page.evaluate(() => {

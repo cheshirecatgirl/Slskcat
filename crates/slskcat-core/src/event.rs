@@ -44,6 +44,16 @@ pub enum Event {
         id: SearchId,
     },
 
+    /// New hits for a standing wish. Never empty.
+    WishlistHits {
+        query: String,
+        hits: Vec<SearchHit>,
+    },
+    /// How often the server permits wishes to be re-sent, in whole seconds.
+    WishlistInterval {
+        seconds: u64,
+    },
+
     /// A transfer appeared or changed state.
     TransferUpdated {
         id: TransferId,

@@ -122,7 +122,29 @@ export interface Settings {
   sharedDirs: string[];
   uploadSlots: number;
   searchTimeoutSecs: number;
+  wishlist: string[];
   keychainAvailable: boolean;
+}
+
+/**
+ * A settings object to fall back on when the stored one could not be loaded.
+ *
+ * Defined once: a hand-written literal at each call site silently goes stale
+ * every time `Settings` gains a field, and the compiler only catches it where
+ * the literal happens to be assigned to the full type.
+ */
+export function defaultSettings(): Settings {
+  return {
+    username: "",
+    password: "",
+    rememberPassword: false,
+    downloadDir: "",
+    sharedDirs: [],
+    uploadSlots: 2,
+    searchTimeoutSecs: 12,
+    wishlist: [],
+    keychainAvailable: true,
+  };
 }
 
 export type Disconnect =
@@ -136,6 +158,8 @@ export type CoreEvent =
   | { type: "disconnected"; data: Disconnect }
   | { type: "searchHits"; data: { id: SearchId; hits: SearchHit[] } }
   | { type: "searchFinished"; data: { id: SearchId } }
+  | { type: "wishlistHits"; data: { query: string; hits: SearchHit[] } }
+  | { type: "wishlistInterval"; data: { seconds: number } }
   | { type: "transferUpdated"; data: { id: TransferId; state: TransferState } }
   | { type: "uploadUpdated"; data: Upload }
   | {

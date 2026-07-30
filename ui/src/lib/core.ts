@@ -29,6 +29,8 @@ export const core = {
   /** Starts a search and resolves with the id its hits will carry. */
   search: (query: string) => invoke<SearchId>("search", { query }),
   cancelSearch: (id: SearchId) => invoke<void>("cancel_search", { id }),
+  /** Replace the standing wishlist. Stated whole, not added to. */
+  setWishlist: (queries: string[]) => invoke<void>("set_wishlist", { queries }),
 
   download: (username: string, path: string, size: number) =>
     invoke<void>("download", { username, path, size }),

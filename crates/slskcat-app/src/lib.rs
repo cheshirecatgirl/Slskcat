@@ -91,6 +91,9 @@ fn start_core(app: &AppHandle) -> Commander {
 fn connect(app: State<'_, App>, handle: AppHandle, settings: Settings) -> Result<Settings, String> {
     let config = settings.to_config();
     app.send(Command::Connect(Box::new(config)))?;
+    // The wishlist is not part of the core's Config, so it is restated on
+    // every sign-in; otherwise a saved wish would sit idle until edited.
+    app.send(Command::SetWishlist(settings.wishlist.clone()))?;
     settings::save(&handle, &settings)
 }
 
@@ -126,6 +129,11 @@ fn search(app: State<'_, App>, query: String) -> Result<SearchId, String> {
 #[tauri::command]
 fn cancel_search(app: State<'_, App>, id: SearchId) -> Result<(), String> {
     app.send(Command::CancelSearch(id))
+}
+
+#[tauri::command]
+fn set_wishlist(app: State<'_, App>, queries: Vec<String>) -> Result<(), String> {
+    app.send(Command::SetWishlist(queries))
 }
 
 // --- commands: transfers ---
@@ -256,6 +264,7 @@ pub fn run() {
             save_settings,
             search,
             cancel_search,
+            set_wishlist,
             download,
             pause_transfer,
             resume_transfer,

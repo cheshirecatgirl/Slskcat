@@ -1,6 +1,7 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
+  import { defaultSettings } from "../lib/types";
 
   let username = $state("");
   let password = $state("");
@@ -34,13 +35,7 @@
       // The backend persists what it was given, so the stored settings always
       // describe a configuration that was actually used to sign in.
       const saved = await core.connect({
-        ...(app.settings ?? {
-          downloadDir: "",
-          sharedDirs: [],
-          uploadSlots: 2,
-          searchTimeoutSecs: 12,
-          keychainAvailable: true,
-        }),
+        ...(app.settings ?? defaultSettings()),
         username: username.trim(),
         password,
         rememberPassword: remember,

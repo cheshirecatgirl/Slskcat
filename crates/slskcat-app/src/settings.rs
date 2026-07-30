@@ -41,6 +41,9 @@ pub struct Settings {
     pub shared_dirs: Vec<PathBuf>,
     pub upload_slots: usize,
     pub search_timeout_secs: u64,
+    /// Standing wishes. Persisted because a wish is only useful across
+    /// sessions — the point is that it keeps looking after you stop.
+    pub wishlist: Vec<String>,
     /// False until the credential store has been reached successfully, so the
     /// interface can explain why a password was not remembered.
     #[serde(skip)]
@@ -58,6 +61,7 @@ impl Default for Settings {
             shared_dirs: Vec::new(),
             upload_slots: config.upload_slots,
             search_timeout_secs: config.search_timeout.as_secs(),
+            wishlist: Vec::new(),
             keychain_available: false,
         }
     }
@@ -258,6 +262,84 @@ mod tests {
         assert_eq!(mode(&dir), 0o700, "nor the directory holding it");
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Exercises the real OS credential store, so it needs a session keyring.
+    /// Ignored by default — CI has none, and the degradation path is what runs
+    /// there. To run it:
+    ///
+    /// ```text
+    /// dbus-run-session -- sh -c '
+    ///   echo -n "" | gnome-keyring-daemon --unlock --components=secrets
+    ///   cargo test -p slskcat-app -- --ignored --test-threads=1'
+    /// ```
+    #[test]
+    #[ignore = "needs a session keyring; see the doc comment for how to run it"]
+    fn the_password_round_trips_through_the_credential_store() {
+        let user = format!("slskcat-test-{}", std::process::id());
+
+        // Nothing stored yet: the store is reachable, the entry is absent.
+        let (password, available) = read_password(&user);
+        assert!(
+            available,
+            "the credential store should be reachable in this test"
+        );
+        assert!(password.is_empty(), "no entry has been written yet");
+
+        assert!(
+            write_password(&user, "correct horse battery", true),
+            "storing should succeed"
+        );
+        let (password, available) = read_password(&user);
+        assert!(available);
+        assert_eq!(
+            password, "correct horse battery",
+            "what went in must come back"
+        );
+
+        // Forgetting removes it, and reading then reports reachable-but-empty
+        // rather than failing.
+        assert!(write_password(&user, "", false), "clearing should succeed");
+        let (password, available) = read_password(&user);
+        assert!(available);
+        assert!(password.is_empty(), "the entry should be gone");
+
+        // Clearing again is not an error: the desired end state already holds.
+        assert!(write_password(&user, "", false));
+    }
+
+    #[test]
+    #[ignore = "needs a session keyring; see the doc comment above"]
+    fn declining_to_remember_stores_nothing() {
+        let user = format!("slskcat-test-decline-{}", std::process::id());
+        write_password(&user, "should-not-persist", false);
+
+        let (password, _) = read_password(&user);
+        assert!(
+            password.is_empty(),
+            "a password must not be stored when not asked for"
+        );
+    }
+
+    #[test]
+    fn an_empty_username_never_touches_the_credential_store() {
+        // Guards the early return: an entry keyed on "" would be shared by
+        // every user of the machine.
+        assert!(!write_password("", "secret", true));
+        let (password, available) = read_password("");
+        assert!(password.is_empty());
+        assert!(!available);
+    }
+
+    #[test]
+    fn a_wishlist_survives_a_round_trip_through_the_settings_file() {
+        let settings = Settings {
+            wishlist: vec!["boards of canada".into(), "coil — musick".into()],
+            ..Settings::default()
+        };
+        let restored: Settings =
+            serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
+        assert_eq!(restored.wishlist, settings.wishlist);
     }
 
     #[test]

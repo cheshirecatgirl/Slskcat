@@ -76,6 +76,13 @@
   --space-a: #6d5ce766;
   --space-b: #e879973d;
 }
+[data-space="wishlist"] {
+  --accent: #4aa8e0;
+  --accent-hover: #5db8ee;
+  --accent-quiet: #4aa8e01f;
+  --space-a: #2e86cf66;
+  --space-b: #7c5cf63d;
+}
 [data-space="transfers"] {
   --accent: #3fbfa0;
   --accent-hover: #4fd3b2;
