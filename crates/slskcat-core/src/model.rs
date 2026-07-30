@@ -286,6 +286,8 @@ pub struct UserSummary {
     pub presence: Option<Presence>,
     pub shared_files: Option<u32>,
     pub shared_directories: Option<u32>,
+    /// Average upload speed in bytes per second, as the server records it.
+    pub average_speed: Option<u32>,
 }
 
 /// Everything needed to log in and serve files.

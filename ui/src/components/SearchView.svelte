@@ -94,6 +94,15 @@
     }
   }
 
+  /** Stop a running search. Hits already delivered stay on screen. */
+  async function stop(id: number) {
+    try {
+      await core.cancelSearch(id);
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
   async function download(row: ResultRow) {
     try {
       await core.download(row.username, row.path, row.size);
@@ -171,6 +180,9 @@
         {rows.length.toLocaleString()} of {search.rows.length.toLocaleString()}
         {#if search.running}<span class="running">· searching…</span>{/if}
       </span>
+      {#if search.running}
+        <button class="btn quiet small" onclick={() => stop(search.id)}>Stop</button>
+      {/if}
     </div>
 
     <div class="head">

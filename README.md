@@ -144,12 +144,19 @@ system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libssl-dev`,
 ```bash
 pnpm --dir ui install
 
-cargo test                        # 46 unit tests, no network needed
+cargo test                        # 49 unit tests, no network needed
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 
-cargo tauri dev
+cargo tauri dev                   # run it
+cargo tauri build                 # package it
 ```
+
+`cargo tauri build --bundles deb` is verified: it produces a 2.0 MB `.deb`
+carrying the binary, icons and a desktop entry, depending only on
+`libwebkit2gtk-4.1-0` and `libgtk-3-0`. The Windows and macOS bundles are
+configured (`.ico` and `.icns` are generated and wired up) but cannot be built
+or verified from Linux.
 
 `.github/workflows/ci.yml` runs the same checks on every push, in three jobs:
 Rust (fmt, clippy with warnings denied, tests), frontend (typecheck and
@@ -173,10 +180,11 @@ node tools/screenshots.mjs ../docs
 
 - **Never tested against the live network.** Every test here is offline.
 - **Wishlist** is supported by the protocol library and not wired up.
-- `requestUserInfo` and `cancelSearch` are in the bridge and called by nothing.
 - The keychain path is unexercised — it needs a real desktop session. Only the
   degradation path has been verified.
-- No packaging run (`tauri build`), and no Windows `.ico`.
+- Only the Linux `.deb` bundle has actually been built. `rpm` and `appimage`
+  need tooling not present here; `msi`/`nsis` and `dmg`/`app` need their own
+  operating systems.
 
 ## Known limitations
 

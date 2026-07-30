@@ -89,6 +89,8 @@ export interface UserSummary {
   presence: Presence | null;
   sharedFiles: number | null;
   sharedDirectories: number | null;
+  /** Bytes per second, as the server records it. */
+  averageSpeed: number | null;
 }
 
 export interface Credentials {

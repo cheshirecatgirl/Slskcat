@@ -1,13 +1,14 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
-  import { bytes, fileName, tailPath } from "../lib/format";
+  import { bytes, fileName, rate, tailPath } from "../lib/format";
 
   let who = $state("");
   let pending = $state(false);
   let open = $state<Record<string, boolean>>({});
 
   const directories = $derived(app.browseResult ?? []);
+  const info = $derived(app.browsing ? app.users[app.browsing] : undefined);
   const totals = $derived.by(() => {
     let files = 0;
     let size = 0;
@@ -26,6 +27,9 @@
     app.browseResult = null;
     try {
       await core.browseUser(name);
+      // Ask the server about them at the same time: whether they are online
+      // and how fast they are decides whether the listing is worth acting on.
+      await core.requestUserInfo(name);
     } catch (error) {
       app.notify(String(error), "danger");
     }
@@ -72,10 +76,19 @@
     {#if app.browsing && app.browseResult}
       <p class="meta">
         <strong>{app.browsing}</strong>
+        {#if info?.presence}
+          <span class="tag {info.presence === 'online' ? 'ok' : ''}">{info.presence}</span>
+        {/if}
         <span class="num">
           {directories.length.toLocaleString()} folders ·
           {totals.files.toLocaleString()} files · {bytes(totals.size)}
         </span>
+        {#if info?.averageSpeed}
+          <span class="num">avg {rate(info.averageSpeed)}</span>
+        {/if}
+        {#if info?.sharedFiles}
+          <span class="num">shares {info.sharedFiles.toLocaleString()}</span>
+        {/if}
       </p>
     {/if}
   </header>
@@ -154,6 +167,7 @@
   }
   .meta {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: baseline;
     margin-top: 9px;

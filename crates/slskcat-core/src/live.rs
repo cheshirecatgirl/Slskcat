@@ -60,6 +60,12 @@ pub struct LiveBackend {
     transfers: HashMap<TransferId, TransferWatch>,
     /// Users whose browse listing has been requested but not yet returned.
     pending_browses: Vec<String>,
+    /// Peers we have asked about, with the last summary sent to the interface.
+    ///
+    /// The server answers presence and statistics separately and pushes later
+    /// status changes unprompted, so a peer stays watched once asked about and
+    /// only a changed summary is emitted.
+    watched_users: HashMap<String, UserSummary>,
     /// Last reported share counts, so an unchanged count stays quiet.
     shares: Option<(u32, u32)>,
 }
@@ -146,6 +152,7 @@ impl LiveBackend {
         self.stop_all_searches();
         self.transfers.clear();
         self.pending_browses.clear();
+        self.watched_users.clear();
         self.shares = None;
         if self.client.take().is_some() {
             out.emit(Event::Disconnected(reason));
@@ -390,6 +397,39 @@ impl LiveBackend {
         });
     }
 
+    /// Ask the server about a peer and watch for the answer.
+    ///
+    /// The request and the reply are separate: the library caches whatever
+    /// arrives, and `drain_users` is what turns it into an event. Without that
+    /// second half the request would go out and nothing would ever come back.
+    fn request_user(&mut self, username: String, out: &EventSink) {
+        let Some(client) = self.client(out) else {
+            return;
+        };
+        if let Err(error) = client.request_user_info(&username) {
+            out.warn(format!("Could not look up {username}: {error}"));
+            return;
+        }
+        // A fresh request invalidates the library's snapshot, so the remembered
+        // summary is cleared too — otherwise an unchanged reply would look like
+        // no news and never be emitted.
+        self.watched_users.insert(username, UserSummary::default());
+    }
+
+    /// Emit a summary for any watched peer whose details have changed.
+    fn drain_users(&mut self, client: &Client, out: &EventSink) {
+        for (username, last) in &mut self.watched_users {
+            let Some(info) = client.user_info(username) else {
+                continue;
+            };
+            let summary = convert_user(&info);
+            if summary != *last {
+                *last = summary.clone();
+                out.emit(Event::UserUpdated(summary));
+            }
+        }
+    }
+
     fn browse(&mut self, username: String, out: &EventSink) {
         let Some(client) = self.client(out) else {
             return;
@@ -489,13 +529,7 @@ impl Backend for LiveBackend {
             }
 
             Command::BrowseUser(username) => self.browse(username, out),
-            Command::RequestUserInfo(username) => {
-                if let Some(client) = self.client(out)
-                    && let Err(error) = client.request_user_info(&username)
-                {
-                    out.warn(format!("Could not look up {username}: {error}"));
-                }
-            }
+            Command::RequestUserInfo(username) => self.request_user(username, out),
 
             Command::RequestRoomList => {
                 if let Some(client) = self.client(out)
@@ -573,6 +607,7 @@ impl Backend for LiveBackend {
         Self::drain_uploads(&client, out);
         Self::drain_rooms(&client, out);
         self.drain_browses(&client, out);
+        self.drain_users(&client, out);
         self.report_shares(&client, out);
     }
 
@@ -698,9 +733,8 @@ fn convert_directory(directory: soulseek_rs::SharedDirectory) -> SharedDirectory
     }
 }
 
-/// Translate a library user snapshot, for the caller that asked about a peer.
-#[must_use]
-pub fn convert_user(info: &soulseek_rs::UserInfo) -> UserSummary {
+/// Translate a library user snapshot.
+fn convert_user(info: &soulseek_rs::UserInfo) -> UserSummary {
     UserSummary {
         username: info.username.clone(),
         presence: info.presence.map(|presence| match presence.status {
@@ -710,6 +744,7 @@ pub fn convert_user(info: &soulseek_rs::UserInfo) -> UserSummary {
         }),
         shared_files: info.stats.map(|stats| stats.shared_files),
         shared_directories: info.stats.map(|stats| stats.shared_folders),
+        average_speed: info.stats.map(|stats| stats.average_speed),
     }
 }
 
@@ -907,6 +942,62 @@ mod tests {
         assert_eq!(
             hit.files[0].duration,
             Some(std::time::Duration::from_secs(210))
+        );
+    }
+
+    #[test]
+    fn a_user_summary_carries_presence_stats_and_speed() {
+        // `UserInfo` is non-exhaustive, so it is built through its
+        // constructor and then filled in.
+        let mut info = soulseek_rs::UserInfo::pending("peer".into());
+        info.presence = Some(soulseek_rs::UserPresence {
+            status: UserStatus::Online,
+            privileged: false,
+        });
+        info.stats = Some(soulseek_rs::UserStats {
+            average_speed: 512_000,
+            shared_files: 9_100,
+            shared_folders: 240,
+        });
+
+        let summary = convert_user(&info);
+        assert_eq!(summary.username, "peer");
+        assert_eq!(summary.presence, Some(Presence::Online));
+        assert_eq!(summary.shared_files, Some(9_100));
+        assert_eq!(summary.shared_directories, Some(240));
+        assert_eq!(summary.average_speed, Some(512_000));
+    }
+
+    #[test]
+    fn a_half_answered_user_leaves_the_missing_half_unknown() {
+        // The server answers presence and statistics separately, so a snapshot
+        // must be able to report one without inventing the other.
+        let mut info = soulseek_rs::UserInfo::pending("peer".into());
+        info.presence = Some(soulseek_rs::UserPresence {
+            status: UserStatus::Away,
+            privileged: false,
+        });
+
+        let summary = convert_user(&info);
+        assert_eq!(summary.presence, Some(Presence::Away));
+        assert_eq!(
+            summary.shared_files, None,
+            "no statistics reply means unknown, not zero"
+        );
+        assert_eq!(summary.average_speed, None);
+    }
+
+    #[test]
+    fn asking_about_a_user_without_a_connection_warns_and_watches_nothing() {
+        let (out, rx) = sink();
+        let mut backend = LiveBackend::new();
+
+        backend.execute(Command::RequestUserInfo("peer".into()), &out);
+
+        assert!(matches!(rx.try_recv(), Ok(Event::Warning(_))));
+        assert!(
+            backend.watched_users.is_empty(),
+            "nothing was asked, so there is nothing to wait for"
         );
     }
 
