@@ -159,7 +159,8 @@ pnpm --dir ui build               # typecheck + bundle
 
 Running and packaging go through the Tauri CLI. It is `cargo tauri`, a cargo
 subcommand — there is no `tauri` on your `PATH` — and it finds
-`crates/slskcat-app/tauri.conf.json` itself, so the repo root is fine:
+`crates/slskcat-app/tauri.conf.json` itself, so any directory in the repo
+works:
 
 ```bash
 cargo tauri dev                   # run it; starts Vite itself
