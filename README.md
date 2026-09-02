@@ -211,13 +211,12 @@ fetching their details, then exits non-zero if any step failed.
 
 `ui/tools/screenshots.mjs` renders the built interface in headless Chromium
 against a mocked Tauri bridge, driving it through sign-in, search, the command
-bar, transfers, rooms and settings in both colour schemes. Playwright is not a
-dependency; install it on demand:
+bar, transfers, rooms and settings in both colour schemes. Playwright is a dev
+dependency, so `pnpm --dir ui install` is all the setup there is:
 
 ```bash
 pnpm build
 python3 -m http.server 8899 -d dist &
-pnpm dlx playwright@latest
 node tools/screenshots.mjs ../docs
 ```
 

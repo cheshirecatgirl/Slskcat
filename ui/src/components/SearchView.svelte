@@ -11,6 +11,10 @@
   let format = $state("any");
   let sortKey = $state<"name" | "size" | "bitrate" | "speed" | "user">("speed");
   let sortAsc = $state(false);
+  /** Grouped by peer and folder, the way SoulseekQt shows results, or flat. */
+  let mode = $state<"folders" | "files">("folders");
+  /** Collapsed nodes, by key. Absent means open. */
+  let closed = $state<Record<string, true>>({});
 
   /** Row height in px. Fixed, which is what makes windowing cheap and exact. */
   const ROW = 34;
@@ -58,16 +62,105 @@
     });
   });
 
-  // The rendered window: only these rows exist in the DOM at any moment.
+  /**
+   * One line of the grouped view.
+   *
+   * The tree is flattened to a list rather than nested markup so the same
+   * fixed-height windowing works on it: a peer sharing a thousand files is
+   * one array either way, and only the lines on screen are ever built.
+   */
+  type Line =
+    | { kind: "user"; key: string; username: string; files: number; freeSlots: number; speed: number }
+    | { kind: "folder"; key: string; username: string; folder: string; files: number; size: number }
+    | { kind: "file"; key: string; row: ResultRow };
+
+  /** Group preserving first appearance, so the chosen sort still shows. */
+  function groupBy<T>(items: T[], by: (item: T) => string): Map<string, T[]> {
+    const out = new Map<string, T[]>();
+    for (const item of items) {
+      const key = by(item);
+      const existing = out.get(key);
+      if (existing) existing.push(item);
+      else out.set(key, [item]);
+    }
+    return out;
+  }
+
+  const lines = $derived.by(() => {
+    if (mode !== "folders") return [] as Line[];
+    const out: Line[] = [];
+    for (const [username, mine] of groupBy(rows, (r) => r.username)) {
+      const userKey = `u ${username}`;
+      // Slots and speed describe the peer, so any of its rows will do.
+      // `groupBy` never makes an empty group, but the compiler cannot know it.
+      const peer = mine[0];
+      if (!peer) continue;
+      out.push({
+        kind: "user",
+        key: userKey,
+        username,
+        files: mine.length,
+        freeSlots: peer.freeSlots,
+        speed: peer.speed,
+      });
+      if (closed[userKey]) continue;
+
+      for (const [folder, here] of groupBy(mine, (r) => parentPath(r.path))) {
+        const folderKey = `f ${username} ${folder}`;
+        out.push({
+          kind: "folder",
+          key: folderKey,
+          username,
+          folder,
+          files: here.length,
+          size: here.reduce((total, r) => total + r.size, 0),
+        });
+        if (closed[folderKey]) continue;
+        for (const row of here) {
+          out.push({ kind: "file", key: `x ${username} ${row.path}`, row });
+        }
+      }
+    }
+    return out;
+  });
+
+  /** What the scrollbar and the window are measured against. */
+  const length = $derived(mode === "folders" ? lines.length : rows.length);
+
+  // The rendered window: only these exist in the DOM at any moment.
   const first = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
   const count = $derived(Math.ceil(viewportHeight / ROW) + OVERSCAN * 2);
   const visible = $derived(rows.slice(first, first + count));
+  const visibleLines = $derived(lines.slice(first, first + count));
+
+  function toggle(key: string) {
+    // Reassigned rather than mutated: the record is what the tree reads.
+    if (closed[key]) {
+      const { [key]: _removed, ...rest } = closed;
+      closed = rest;
+    } else {
+      closed = { ...closed, [key]: true };
+    }
+  }
 
   function measure() {
     if (!viewport) return;
     scrollTop = viewport.scrollTop;
     viewportHeight = viewport.clientHeight;
   }
+
+  // `measure` used to run only on scroll, so until the first scroll the height
+  // was still zero and the window was nothing but overscan — twelve rows, on a
+  // viewport with room for forty. It also never noticed a resized window.
+  // Measuring when the element arrives and watching it thereafter fixes both.
+  $effect(() => {
+    const element = viewport;
+    if (!element) return;
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
 
   function sortBy(key: typeof sortKey) {
     if (sortKey === key) {
@@ -107,6 +200,23 @@
     try {
       await core.download(row.username, row.path, row.size);
       app.notify(`Queued ${fileName(row.path)}`);
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
+  /**
+   * Queue every file of one peer's folder.
+   *
+   * Sent in one go and left to the core's slot limit to pace, which is what
+   * that limit is for — the alternative is asking the interface to invent a
+   * second, quieter queue that disagrees with the real one.
+   */
+  async function downloadFolder(username: string, folder: string) {
+    const here = rows.filter((r) => r.username === username && parentPath(r.path) === folder);
+    try {
+      for (const row of here) await core.download(row.username, row.path, row.size);
+      app.notify(`Queued ${here.length} file${here.length === 1 ? "" : "s"}`);
     } catch (error) {
       app.notify(String(error), "danger");
     }
@@ -176,6 +286,14 @@
         <input type="checkbox" bind:checked={readyOnly} />
         <span>Free slots only</span>
       </label>
+      <div class="seg" role="group" aria-label="Result layout">
+        <button class="segbtn" class:on={mode === "folders"} onclick={() => (mode = "folders")}>
+          Folders
+        </button>
+        <button class="segbtn" class:on={mode === "files"} onclick={() => (mode = "files")}>
+          Files
+        </button>
+      </div>
       <span class="summary num">
         {rows.length.toLocaleString()} of {search.rows.length.toLocaleString()}
         {#if search.running}<span class="running">· searching…</span>{/if}
@@ -185,6 +303,7 @@
       {/if}
     </div>
 
+    {#if mode === "files"}
     <div class="head">
       {#each columns as col (col.key)}
         <button class="th {col.cls}" onclick={() => sortBy(col.key)}>
@@ -194,11 +313,63 @@
       {/each}
       <span class="th c-act"></span>
     </div>
+    {/if}
 
     <div class="body" bind:this={viewport} onscroll={measure}>
       {#if rows.length === 0}
         <div class="empty">
           <h3>{search.running ? "Waiting for peers" : "No matches"}</h3>
+        </div>
+      {:else if mode === "folders"}
+        <!-- Same windowing as the flat list: the tree is a flat array of
+             fixed-height lines, so nesting costs nothing to scroll. -->
+        <div class="spacer" style="height: {length * ROW}px">
+          <div class="window" style="transform: translateY({first * ROW}px)">
+            {#each visibleLines as line (line.key)}
+              {#if line.kind === "user"}
+                <button class="tline tuser" onclick={() => toggle(line.key)}>
+                  <span class="chev" class:open={!closed[line.key]} aria-hidden="true">▶</span>
+                  <span class="uname">{line.username}</span>
+                  {#if line.freeSlots > 0}<span class="tag ok">free</span>{/if}
+                  <span class="tmeta num">{line.files.toLocaleString()} files</span>
+                  <span class="tmeta num dim">{rate(line.speed)}</span>
+                </button>
+              {:else if line.kind === "folder"}
+                <div class="tline tfolder">
+                  <button class="tgrip" onclick={() => toggle(line.key)}>
+                    <span class="chev" class:open={!closed[line.key]} aria-hidden="true">▶</span>
+                    <span class="fold selectable" title={line.folder}>
+                      {tailPath(line.folder, 3) || "(root)"}
+                    </span>
+                    <span class="tmeta num">{line.files.toLocaleString()}</span>
+                    <span class="tmeta num dim">{bytes(line.size)}</span>
+                  </button>
+                  <button
+                    class="btn small get"
+                    onclick={() => downloadFolder(line.username, line.folder)}
+                  >
+                    Get folder
+                  </button>
+                </div>
+              {:else}
+                <div
+                  class="tline tfile"
+                  ondblclick={() => download(line.row)}
+                  role="button"
+                  tabindex="-1"
+                  title={line.row.path}
+                >
+                  <span class="fname selectable">{fileName(line.row.path)}</span>
+                  <span class="tmeta num">{bytes(line.row.size)}</span>
+                  <span class="tmeta num">
+                    {bitrate(line.row.bitrate)}
+                    {#if line.row.duration}<span class="dim">· {duration(line.row.duration)}</span>{/if}
+                  </span>
+                  <button class="btn small get" onclick={() => download(line.row)}>Get</button>
+                </div>
+              {/if}
+            {/each}
+          </div>
         </div>
       {:else}
         <!-- A spacer of the full height gives the scrollbar honest proportions
@@ -241,6 +412,118 @@
 </div>
 
 <style>
+  /* --- grouped view: peer, then folder, then files ---------------------- */
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+  }
+  .segbtn {
+    padding: 3px 10px;
+    border-radius: calc(var(--radius-sm) - 2px);
+    font-size: 11.5px;
+    color: var(--text-3);
+    transition: background var(--fast), color var(--fast);
+  }
+  .segbtn.on {
+    background: var(--surface-1);
+    color: var(--text-1);
+  }
+
+  .tline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 34px;
+    padding: 0 14px;
+    text-align: left;
+  }
+  .tuser {
+    gap: 8px;
+    background: var(--surface-2);
+    font-weight: 500;
+  }
+  .tuser:hover {
+    background: var(--surface-3);
+  }
+  .tuser .uname {
+    font-size: 12.5px;
+  }
+
+  .tfolder {
+    padding-right: 10px;
+    padding-left: 26px;
+  }
+  .tfolder:hover,
+  .tfile:hover {
+    background: var(--accent-quiet);
+  }
+  /* The grip is the whole clickable span of the folder line, so the button
+     beside it stays a separate target rather than swallowing the toggle. */
+  .tgrip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    text-align: left;
+  }
+  .fold {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+
+  .tfile {
+    padding-left: 46px;
+  }
+  .tfile .fname {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+
+  /* Actions appear on hover, as they do on a flat row — and now on keyboard
+     focus too, which the flat rows never handled: a button at `opacity: 0` is
+     still focusable and still clickable, so tabbing to one was reaching
+     something invisible. */
+  .tline .get {
+    opacity: 0;
+    transition: opacity var(--fast);
+  }
+  .tline:hover .get,
+  .tline .get:focus-visible {
+    opacity: 1;
+  }
+
+  .tmeta {
+    flex: none;
+    font-size: 11.5px;
+    color: var(--text-2);
+    text-align: right;
+  }
+  .chev {
+    flex: none;
+    width: 8px;
+    font-size: 8px;
+    color: var(--text-3);
+    transition: transform var(--fast);
+  }
+  .chev.open {
+    transform: rotate(90deg);
+  }
+
   .view {
     display: flex;
     flex-direction: column;
@@ -459,7 +742,8 @@
   .row:hover {
     background: var(--accent-quiet);
   }
-  .row:hover .get {
+  .row:hover .get,
+  .row .get:focus-visible {
     opacity: 1;
   }
 

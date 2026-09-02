@@ -75,7 +75,6 @@ says nothing about WebKitGTK.
 ```bash
 pnpm --dir ui build
 python3 -m http.server 8899 -d ui/dist &
-pnpm dlx playwright@latest        # once
 node ui/tools/screenshots.mjs ../docs
 ```
 
