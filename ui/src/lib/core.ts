@@ -9,6 +9,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { hydrateSettings } from "./types";
 import type { CoreEvent, SearchId, Settings, ShareVerdict } from "./types";
 
 /** Must match `slskcat_app::EVENT_CHANNEL`. */
@@ -21,9 +22,11 @@ export function onEvent(handler: (event: CoreEvent) => void): Promise<UnlistenFn
 
 export const core = {
   /** Signs in and persists the settings the session was started with. */
-  connect: (settings: Settings) => invoke<Settings>("connect", { settings }),
-  loadSettings: () => invoke<Settings>("load_settings"),
-  saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
+  connect: (settings: Settings) =>
+    invoke<Partial<Settings>>("connect", { settings }).then(hydrateSettings),
+  loadSettings: () => invoke<Partial<Settings>>("load_settings").then(hydrateSettings),
+  saveSettings: (settings: Settings) =>
+    invoke<Partial<Settings>>("save_settings", { settings }).then(hydrateSettings),
   disconnect: () => invoke<void>("disconnect"),
 
   /** Starts a search and resolves with the id its hits will carry. */

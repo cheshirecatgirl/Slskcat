@@ -147,6 +147,33 @@ export function defaultSettings(): Settings {
   };
 }
 
+/**
+ * A `Settings` with every field present, whatever the backend actually sent.
+ *
+ * The commands are typed as returning the whole shape, but a field the backend
+ * omits arrives as `undefined` behind a type that promises a string — and the
+ * first `.length` taken on it throws inside a `$derived`, which freezes
+ * whatever was bound to it. That is not hypothetical: `password` was
+ * `#[serde(skip)]` in Rust, and the sign-in button sat permanently disabled
+ * because of it. Filling the gaps at the boundary keeps a backend mistake from
+ * turning into a dead form.
+ */
+export function hydrateSettings(raw: Partial<Settings> | null | undefined): Settings {
+  const base = defaultSettings();
+  const from = raw ?? {};
+  return {
+    username: from.username ?? base.username,
+    password: from.password ?? base.password,
+    rememberPassword: from.rememberPassword ?? base.rememberPassword,
+    downloadDir: from.downloadDir ?? base.downloadDir,
+    sharedDirs: from.sharedDirs ?? base.sharedDirs,
+    uploadSlots: from.uploadSlots ?? base.uploadSlots,
+    searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
+    wishlist: from.wishlist ?? base.wishlist,
+    keychainAvailable: from.keychainAvailable ?? base.keychainAvailable,
+  };
+}
+
 export type Disconnect =
   | { type: "requested" }
   | { type: "loggedInElsewhere" }

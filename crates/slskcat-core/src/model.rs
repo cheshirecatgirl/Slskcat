@@ -28,7 +28,9 @@ impl fmt::Display for SearchId {
 /// Identifies one transfer. A peer cannot send us two different files with the
 /// same path, so `(username, path)` is unique and stable across restarts —
 /// which is what lets a resumed download reattach to its row in the UI.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferId {
     pub username: String,
@@ -120,7 +122,7 @@ impl SearchHit {
 /// Where a transfer currently is.
 ///
 /// `Queued`, `Active` and `Paused` are live states; the rest are terminal.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum TransferState {
     /// Waiting in the peer's queue. Carries our position when the peer says.

@@ -32,9 +32,16 @@ const FILE: &str = "settings.json";
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub username: String,
-    /// Not serialised. Carried in memory between the interface and the
-    /// credential store.
-    #[serde(skip)]
+    /// Carried between the interface and the credential store, and removed by
+    /// `for_disk` before anything is written.
+    ///
+    /// It has to take part in serialisation. This struct is also the payload
+    /// of the `connect` command, so `#[serde(skip)]` here did not just keep
+    /// the password off disk: it dropped the typed password on the way into
+    /// Rust — every sign-in went out with an empty one — and omitted the field
+    /// on the way back, leaving the form bound to `undefined`. Keeping the
+    /// secret off disk is the job of `for_disk`, which is the only place that
+    /// writes the file.
     pub password: String,
     pub remember_password: bool,
     pub download_dir: PathBuf,
@@ -46,7 +53,10 @@ pub struct Settings {
     pub wishlist: Vec<String>,
     /// False until the credential store has been reached successfully, so the
     /// interface can explain why a password was not remembered.
-    #[serde(skip)]
+    ///
+    /// A fact about this run rather than a preference, so `for_disk` clears it
+    /// and `load` recomputes it. Serialised for the same reason `password` is:
+    /// the interface reads it off the command's reply.
     pub keychain_available: bool,
 }
 
@@ -68,6 +78,22 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// The same settings with nothing secret and nothing transient in them,
+    /// which is what `settings.json` gets.
+    ///
+    /// Redacting at the point of writing, rather than by leaving the field out
+    /// of the type's serialisation, keeps the guarantee where the file is
+    /// actually produced — and leaves the field free to travel over IPC, which
+    /// is the whole reason the interface can send a password at all.
+    #[must_use]
+    fn for_disk(&self) -> Self {
+        Self {
+            password: String::new(),
+            keychain_available: false,
+            ..self.clone()
+        }
+    }
+
     /// The core configuration these settings describe.
     #[must_use]
     pub fn to_config(&self) -> Config {
@@ -203,7 +229,7 @@ pub fn load(app: &AppHandle) -> Result<Settings, String> {
 /// reached is reported through `keychain_available`, not as an error.
 pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
     let file = path(app)?;
-    let text = serde_json::to_string_pretty(settings)
+    let text = serde_json::to_string_pretty(&settings.for_disk())
         .map_err(|error| format!("Could not encode settings: {error}"))?;
     std::fs::write(&file, text)
         .map_err(|error| format!("Could not write {}: {error}", file.display()))?;
@@ -224,20 +250,57 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_password_is_never_written_to_the_settings_file() {
-        let settings = Settings {
+    fn a_signed_in_settings() -> Settings {
+        Settings {
             username: "listener".into(),
             password: "hunter2".into(),
             remember_password: true,
+            keychain_available: true,
             ..Settings::default()
-        };
-        let json = serde_json::to_string(&settings).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_password_is_never_written_to_the_settings_file() {
+        let json = serde_json::to_string(&a_signed_in_settings().for_disk()).unwrap();
         assert!(
             !json.contains("hunter2"),
             "the password must not reach disk: {json}"
         );
         assert!(json.contains("listener"), "the username should be stored");
+    }
+
+    #[test]
+    fn the_interface_payload_carries_the_password_and_the_keychain_verdict() {
+        // The counterpart to the test above, and the reason `password` is not
+        // `#[serde(skip)]`: this same struct crosses the command boundary, so
+        // skipping the field signed in with an empty password and left the
+        // sign-in form bound to `undefined`.
+        let sent = serde_json::to_value(a_signed_in_settings()).unwrap();
+        assert_eq!(sent["password"], "hunter2");
+        assert_eq!(sent["keychainAvailable"], true);
+
+        let received: Settings = serde_json::from_value(sent).unwrap();
+        assert_eq!(
+            received.password, "hunter2",
+            "a password typed into the interface must survive the trip into Rust"
+        );
+        assert_eq!(
+            received.to_config().credentials.password,
+            "hunter2",
+            "and must be the one the session signs in with"
+        );
+    }
+
+    #[test]
+    fn a_settings_file_never_dictates_whether_the_keychain_works() {
+        // The file records preferences; whether the store answered is a fact
+        // about this run, so it is cleared on the way out and recomputed on
+        // the way in.
+        let json = serde_json::to_string(&a_signed_in_settings().for_disk()).unwrap();
+        let restored: Settings = serde_json::from_str(&json).unwrap();
+        assert!(!restored.keychain_available);
+        assert!(restored.remember_password, "preferences do survive");
     }
 
     #[cfg(unix)]

@@ -8,12 +8,17 @@
   let remember = $state(false);
   /** True once the stored settings have been copied into the fields. */
   let prefilled = $state(false);
+  /** True once anything has been typed, which prefilling must not overwrite. */
+  let touched = $state(false);
 
   // Settings load asynchronously, so the form fills itself in when they
-  // arrive rather than rendering blank and staying that way.
+  // arrive rather than rendering blank and staying that way. Someone who
+  // starts typing before that resolves keeps what they typed: on a cold start
+  // the load can easily lose the race, and having the username vanish
+  // mid-word is worse than not prefilling at all.
   $effect(() => {
     const stored = app.settings;
-    if (!stored || prefilled) return;
+    if (!stored || prefilled || touched) return;
     username = stored.username;
     password = stored.password;
     remember = stored.rememberPassword;
@@ -62,6 +67,7 @@
       <input
         class="field"
         bind:value={username}
+        oninput={() => (touched = true)}
         autocomplete="username"
         spellcheck="false"
         autocapitalize="off"
@@ -75,6 +81,7 @@
         class="field"
         type="password"
         bind:value={password}
+        oninput={() => (touched = true)}
         autocomplete="current-password"
         disabled={app.connecting}
       />
