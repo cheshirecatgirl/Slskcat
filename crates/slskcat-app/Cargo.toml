@@ -14,6 +14,17 @@ workspace = true
 name = "slskcat_app"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+# Set by `tauri build`, and the switch that decides what the binary is.
+#
+# `tauri`'s build script computes `dev = !custom-protocol`, and `dev` is what
+# `generate_context!` reads: without this feature it embeds nothing and points
+# the window at `devUrl` — `http://localhost:5173` — in every profile, release
+# included. A bundle built that way installs fine and opens a blank window on
+# any machine that is not running Vite. Declaring the feature is what lets the
+# CLI turn it off, so the frontend is compiled in instead.
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
