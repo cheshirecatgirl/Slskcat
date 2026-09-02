@@ -8,6 +8,50 @@
     onCommand,
   }: { section: Section; onCommand: () => void } = $props();
 
+  /** Whether the account menu is showing. */
+  let switching = $state(false);
+
+  /** Accounts other than the one signed in — the only ones worth offering. */
+  const others = $derived(
+    (app.settings?.accounts ?? []).filter((name) => name !== app.username),
+  );
+
+  /**
+   * Make an account current and end the session.
+   *
+   * Switching deliberately does not sign in: it fills the form and hands back
+   * control. Signing in on someone's behalf with a stored password is how you
+   * end up connected as an account you only meant to glance at, and the
+   * server treats a second login as a takeover of the first.
+   */
+  async function switchTo(username: string) {
+    switching = false;
+    try {
+      app.settings = await core.switchAccount(username);
+      await core.disconnect();
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
+  async function forget(username: string) {
+    try {
+      app.settings = await core.forgetAccount(username);
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
+  /** Sign out to an empty form, which is where a new account is added. */
+  async function addAccount() {
+    switching = false;
+    try {
+      await core.disconnect();
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
   // Inline SVG rather than an icon package: a handful of paths costs nothing
   // and keeps the bundle free of a dependency that would dwarf them.
   const items: { id: Section; label: string; path: string }[] = [
@@ -78,9 +122,41 @@
   </nav>
 
   <div class="foot">
+    {#if switching}
+      <!-- Anchored above the identity row, the way an account menu sits above
+           the person it belongs to. -->
+      <div class="accounts" role="menu">
+        {#each others as name (name)}
+          <div class="acct" role="none">
+            <button class="pick" role="menuitem" onclick={() => switchTo(name)}>
+              <span class="initial" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+              <span class="aname">{name}</span>
+            </button>
+            <button
+              class="drop"
+              role="menuitem"
+              title="Forget {name}"
+              aria-label="Forget {name}"
+              onclick={() => forget(name)}>×</button
+            >
+          </div>
+        {/each}
+        <button class="add" role="menuitem" onclick={addAccount}>Add another account</button>
+      </div>
+    {/if}
+
     <div class="who">
       <span class="dot" aria-hidden="true"></span>
-      <span class="name selectable" title={app.username}>{app.username}</span>
+      <button
+        class="name selectable"
+        title="Switch account"
+        aria-haspopup="menu"
+        aria-expanded={switching}
+        onclick={() => (switching = !switching)}
+      >
+        <span class="text">{app.username}</span>
+        <span class="caret" class:open={switching} aria-hidden="true">▾</span>
+      </button>
       <button class="out" onclick={() => core.disconnect()} title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm6.2 4.8-1.4 1.4L16.6 11H8v2h8.6l-1.8 1.8 1.4 1.4L20.4 12l-4.2-4.2Z" />
@@ -238,14 +314,125 @@
     background: var(--ok);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
   }
+  /* The name is the menu trigger now, so it needs a hit area and a hover —
+     but it must still read as a name rather than as a control. */
   .name {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     flex: 1;
     min-width: 0;
+    padding: 2px 5px;
+    margin-left: -5px;
+    border-radius: 6px;
     font-size: 12.5px;
     font-weight: 500;
+    text-align: left;
+    transition: background var(--fast);
+  }
+  .name:hover {
+    background: #ffffff14;
+  }
+  .name .text {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .name .caret {
+    flex: none;
+    font-size: 9px;
+    color: var(--text-3);
+    transition: transform var(--fast);
+  }
+  .name .caret.open {
+    transform: rotate(180deg);
+  }
+
+  /* The account menu. Sits above the identity row rather than below it,
+     because the row is already at the bottom of the window. */
+  .accounts {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-bottom: 7px;
+    padding: 4px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line-soft);
+    background: var(--surface-1);
+    box-shadow: var(--shadow);
+    animation: rise var(--spring) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  .acct {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .acct .pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 5px 6px;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background var(--fast);
+  }
+  .acct .pick:hover {
+    background: var(--accent-quiet);
+  }
+  .initial {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .aname {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+  .drop {
+    flex: none;
+    width: 20px;
+    padding: 3px 0;
+    border-radius: 6px;
+    color: var(--text-3);
+    font-size: 13px;
+    line-height: 1;
+    transition: color var(--fast), background var(--fast);
+  }
+  .drop:hover {
+    background: var(--danger-quiet);
+    color: var(--danger);
+  }
+  .add {
+    margin-top: 2px;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-2);
+    text-align: left;
+    transition: background var(--fast), color var(--fast);
+  }
+  .add:hover {
+    background: var(--surface-2);
+    color: var(--text-1);
   }
   .out {
     flex: none;

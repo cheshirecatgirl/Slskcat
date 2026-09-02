@@ -76,6 +76,7 @@ const bridge = () => {
     uploadSlots: 3,
     searchTimeoutSecs: 12,
     wishlist: ["boards of canada — geogaddi vinyl rip", "coil musick to play in the dark 2"],
+    accounts: ["slsk_listener", "night_shift", "tape_hiss"],
     keychainAvailable: true,
   };
 
@@ -278,6 +279,14 @@ const run = async () => {
     await page.fill('section input.field', "got it, thanks — grabbing now");
     await page.waitForTimeout(400);
     await shot("5b-direct");
+
+    // 5c. The account switcher, above the identity row
+    await page.click('.name[aria-haspopup="menu"]');
+    await page.waitForTimeout(400);
+    await shot("5c-accounts");
+    await page.keyboard.press("Escape");
+    await page.click('.name[aria-haspopup="menu"]');
+    await page.waitForTimeout(200);
 
     // 6. Settings, rendered from the persisted preferences
     await page.click('button:has-text("Settings")');

@@ -50,6 +50,12 @@ pub struct Settings {
     /// Downloads allowed to run at once.
     pub download_slots: usize,
     pub search_timeout_secs: u64,
+    /// Every account this machine knows about, most recently used first.
+    ///
+    /// Names only. The credential store is already keyed by username, so the
+    /// passwords sit beside each other without any further arrangement — what
+    /// was missing was any record that the other accounts exist.
+    pub accounts: Vec<String>,
     /// Standing wishes. Persisted because a wish is only useful across
     /// sessions — the point is that it keeps looking after you stop.
     pub wishlist: Vec<String>,
@@ -74,6 +80,7 @@ impl Default for Settings {
             upload_slots: config.upload_slots,
             download_slots: config.download_slots,
             search_timeout_secs: config.search_timeout.as_secs(),
+            accounts: Vec::new(),
             wishlist: Vec::new(),
             keychain_available: false,
         }
@@ -81,6 +88,20 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Record the current account as the most recently used one.
+    ///
+    /// Called on save rather than on sign-in so the list only ever names
+    /// accounts the user actually configured — a typo in the form that never
+    /// reaches the server still gets saved, but a name never typed does not
+    /// appear at all.
+    fn remember_account(&mut self) {
+        if self.username.is_empty() {
+            return;
+        }
+        self.accounts.retain(|name| name != &self.username);
+        self.accounts.insert(0, self.username.clone());
+    }
+
     /// The same settings with nothing secret and nothing transient in them,
     /// which is what `settings.json` gets.
     ///
@@ -232,6 +253,9 @@ pub fn load(app: &AppHandle) -> Result<Settings, String> {
 /// file cannot be encoded or written. A credential store that cannot be
 /// reached is reported through `keychain_available`, not as an error.
 pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
+    let mut settings = settings.clone();
+    settings.remember_account();
+
     let file = path(app)?;
     let text = serde_json::to_string_pretty(&settings.for_disk())
         .map_err(|error| format!("Could not encode settings: {error}"))?;
@@ -245,9 +269,60 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
         settings.remember_password,
     );
 
-    let mut saved = settings.clone();
-    saved.keychain_available = stored || !settings.remember_password;
+    let mut saved = settings;
+    saved.keychain_available = stored || !saved.remember_password;
     Ok(saved)
+}
+
+/// Switch the stored settings to another known account.
+///
+/// Everything that is a preference — shared directories, slots, wishlist —
+/// belongs to the machine rather than the account and stays as it is. Only the
+/// identity changes, and the password comes from the credential store under
+/// the new name.
+///
+/// # Errors
+/// If the settings cannot be read or written.
+pub fn switch(app: &AppHandle, username: &str) -> Result<Settings, String> {
+    let mut settings = load(app)?;
+    if settings.username == username {
+        return Ok(settings);
+    }
+    username.clone_into(&mut settings.username);
+
+    let (password, available) = read_password(username);
+    settings.password = password;
+    settings.keychain_available = available;
+    // Nothing stored for this account means it has to be typed again, which
+    // is not the same as choosing not to remember it.
+    settings.remember_password = !settings.password.is_empty();
+
+    save(app, &settings)
+}
+
+/// Forget an account: remove it from the list and delete its password.
+///
+/// # Errors
+/// If the settings cannot be read or written.
+pub fn forget(app: &AppHandle, username: &str) -> Result<Settings, String> {
+    let mut settings = load(app)?;
+    settings.accounts.retain(|name| name != username);
+
+    // Best effort, and deliberately after the list has been updated: an
+    // account the user asked to forget must stop being offered even if the
+    // credential store cannot be reached to clear the secret.
+    let _ = write_password(username, "", false);
+
+    if settings.username == username {
+        // The one being forgotten is the current one, so fall back to whatever
+        // is left, or to nothing rather than a name that no longer exists.
+        settings.username = settings.accounts.first().cloned().unwrap_or_default();
+        let (password, available) = read_password(&settings.username);
+        settings.password = password;
+        settings.keychain_available = available;
+        settings.remember_password = !settings.password.is_empty();
+    }
+    save(app, &settings)
 }
 
 #[cfg(test)]
@@ -396,6 +471,32 @@ mod tests {
         let (password, available) = read_password("");
         assert!(password.is_empty());
         assert!(!available);
+    }
+
+    #[test]
+    fn saving_puts_the_current_account_at_the_front_without_duplicating_it() {
+        let mut settings = Settings {
+            username: "second".into(),
+            accounts: vec!["first".into(), "second".into()],
+            ..Settings::default()
+        };
+        settings.remember_account();
+        assert_eq!(settings.accounts, vec!["second", "first"]);
+
+        // Again, and it is still one entry — the list is a set with an order,
+        // and re-saving the same account must not grow it.
+        settings.remember_account();
+        assert_eq!(settings.accounts, vec!["second", "first"]);
+    }
+
+    #[test]
+    fn an_empty_username_is_not_an_account() {
+        let mut settings = Settings::default();
+        settings.remember_account();
+        assert!(
+            settings.accounts.is_empty(),
+            "a blank name must never reach the switcher"
+        );
     }
 
     #[test]

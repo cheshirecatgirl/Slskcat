@@ -27,6 +27,11 @@ export const core = {
   loadSettings: () => invoke<Partial<Settings>>("load_settings").then(hydrateSettings),
   saveSettings: (settings: Settings) =>
     invoke<Partial<Settings>>("save_settings", { settings }).then(hydrateSettings),
+  /** Make another known account current. Signing in stays a separate step. */
+  switchAccount: (username: string) =>
+    invoke<Partial<Settings>>("switch_account", { username }).then(hydrateSettings),
+  forgetAccount: (username: string) =>
+    invoke<Partial<Settings>>("forget_account", { username }).then(hydrateSettings),
   disconnect: () => invoke<void>("disconnect"),
 
   /** Starts a search and resolves with the id its hits will carry. */

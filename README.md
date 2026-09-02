@@ -152,7 +152,7 @@ system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libssl-dev`,
 pnpm --dir ui install
 cargo install tauri-cli --version "^2" --locked
 
-cargo test                        # 59 tests + 2 keyring-gated
+cargo test                        # 66 tests + 2 keyring-gated
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 ```

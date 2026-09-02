@@ -107,6 +107,19 @@ fn save_settings(handle: AppHandle, settings: Settings) -> Result<Settings, Stri
     settings::save(&handle, &settings)
 }
 
+/// Make another known account the current one, and return the settings it
+/// describes. Signing in is a separate step, so the form is filled rather than
+/// a session started behind the user's back.
+#[tauri::command]
+fn switch_account(handle: AppHandle, username: String) -> Result<Settings, String> {
+    settings::switch(&handle, &username)
+}
+
+#[tauri::command]
+fn forget_account(handle: AppHandle, username: String) -> Result<Settings, String> {
+    settings::forget(&handle, &username)
+}
+
 #[tauri::command]
 fn disconnect(app: State<'_, App>) -> Result<(), String> {
     app.send(Command::Disconnect)
@@ -267,6 +280,8 @@ pub fn run() {
             disconnect,
             load_settings,
             save_settings,
+            switch_account,
+            forget_account,
             search,
             cancel_search,
             set_wishlist,

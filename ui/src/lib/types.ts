@@ -125,6 +125,8 @@ export interface Settings {
   downloadSlots: number;
   searchTimeoutSecs: number;
   wishlist: string[];
+  /** Known accounts on this machine, most recently used first. */
+  accounts: string[];
   keychainAvailable: boolean;
 }
 
@@ -146,6 +148,7 @@ export function defaultSettings(): Settings {
     downloadSlots: 3,
     searchTimeoutSecs: 12,
     wishlist: [],
+    accounts: [],
     keychainAvailable: true,
   };
 }
@@ -174,6 +177,7 @@ export function hydrateSettings(raw: Partial<Settings> | null | undefined): Sett
     downloadSlots: from.downloadSlots ?? base.downloadSlots,
     searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
     wishlist: from.wishlist ?? base.wishlist,
+    accounts: from.accounts ?? base.accounts,
     keychainAvailable: from.keychainAvailable ?? base.keychainAvailable,
   };
 }
