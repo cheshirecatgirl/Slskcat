@@ -52,3 +52,38 @@ pub fn load(path: &Path) -> io::Result<Vec<TransferSnapshot>> {
     serde_json::from_slice(&data)
         .map_err(|error| io::Error::other(error.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_recovery_file_is_empty() {
+        let path = std::env::temp_dir().join(format!("slskcat-missing-{}.json", std::process::id()));
+        let _ = fs::remove_file(&path);
+
+        assert!(load(&path).expect("missing state should be valid").is_empty());
+    }
+
+    #[test]
+    fn saved_snapshots_round_trip() {
+        let path = std::env::temp_dir().join(format!("slskcat-recovery-{}.json", std::process::id()));
+        let snapshot = TransferSnapshot {
+            id: TransferId::new("peer", "album/file.flac"),
+            size: 123,
+            state: TransferState::Paused {
+                transferred: 50,
+                total: 123,
+            },
+            destination: PathBuf::from("Downloads/file.flac"),
+        };
+
+        save(&path, std::slice::from_ref(&snapshot)).expect("save should work");
+        let loaded = load(&path).expect("load should work");
+        let _ = fs::remove_file(&path);
+
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, snapshot.id);
+        assert_eq!(loaded[0].size, snapshot.size);
+    }
+}
