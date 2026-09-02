@@ -33,7 +33,7 @@
     go("search", "Search", "Go to search"),
     go("transfers", "Transfers", "Go to transfers"),
     go("browse", "Browse", "Go to browse"),
-    go("rooms", "Rooms", "Go to rooms"),
+    go("messages", "Messages", "Go to rooms and direct messages"),
     go("settings", "Settings", "Go to settings"),
   ];
 

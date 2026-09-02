@@ -4,5 +4,5 @@ export type Section =
   | "wishlist"
   | "transfers"
   | "browse"
-  | "rooms"
+  | "messages"
   | "settings";

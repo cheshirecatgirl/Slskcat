@@ -11,7 +11,7 @@
   import WishlistView from "./components/WishlistView.svelte";
   import TransfersView from "./components/TransfersView.svelte";
   import BrowseView from "./components/BrowseView.svelte";
-  import RoomsView from "./components/RoomsView.svelte";
+  import MessagesView from "./components/MessagesView.svelte";
   import SettingsView from "./components/SettingsView.svelte";
 
   let section = $state<Section>("search");
@@ -68,8 +68,8 @@
       <TransfersView />
     {:else if section === "browse"}
       <BrowseView />
-    {:else if section === "rooms"}
-      <RoomsView />
+    {:else if section === "messages"}
+      <MessagesView />
     {:else}
       <SettingsView />
     {/if}

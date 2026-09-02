@@ -32,8 +32,8 @@
       path: "M4 5a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm2 2v10h12V7H6Z",
     },
     {
-      id: "rooms",
-      label: "Rooms",
+      id: "messages",
+      label: "Messages",
       path: "M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2Zm0 2v10.9L8.3 15H20V6H4Z",
     },
     {

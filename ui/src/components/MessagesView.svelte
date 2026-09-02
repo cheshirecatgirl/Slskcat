@@ -6,6 +6,15 @@
   /** Which conversation the right-hand pane is showing. */
   type Open = { kind: "room"; name: string } | { kind: "direct"; name: string } | null;
 
+  /**
+   * Which list the left pane is showing.
+   *
+   * Rooms and people were one scrolling column before, so a handful of
+   * conversations sat above three hundred rooms and went looking for them
+   * every time. They are different things and they are separated now.
+   */
+  let side = $state<"rooms" | "users">("rooms");
+
   let open = $state<Open>(null);
   let draft = $state("");
   let query = $state("");
@@ -50,6 +59,9 @@
 
   function openDirect(name: string) {
     open = { kind: "direct", name };
+    // A message arriving from someone while the rooms list is up would
+    // otherwise open a thread the reader cannot see selected anywhere.
+    side = "users";
   }
 
   function leave(name: string) {
@@ -87,47 +99,73 @@
 <div class="view">
   <aside>
     <div class="pane-head">
-      <input class="field slim" bind:value={query} placeholder="Find a room…" />
+      <div class="seg" role="tablist">
+        <button
+          class="segbtn"
+          class:on={side === "rooms"}
+          role="tab"
+          aria-selected={side === "rooms"}
+          onclick={() => (side = "rooms")}
+        >
+          Rooms
+        </button>
+        <button
+          class="segbtn"
+          class:on={side === "users"}
+          role="tab"
+          aria-selected={side === "users"}
+          onclick={() => (side = "users")}
+        >
+          Users
+          {#if peers.length > 0}<span class="pip num">{peers.length}</span>{/if}
+        </button>
+      </div>
     </div>
 
-    {#if peers.length > 0}
-      <p class="group">Direct</p>
+    {#if side === "users"}
+      <form class="newpeer" onsubmit={startDirect}>
+        <input class="field slim" bind:value={newPeer} placeholder="Message a user…" />
+      </form>
+
       {#each peers as peer (peer)}
         <div class="entry" class:active={open?.kind === "direct" && open.name === peer}>
           <button class="pick" onclick={() => openDirect(peer)}>
             <span class="name">{peer}</span>
           </button>
         </div>
+      {:else}
+        <p class="none">No conversations yet.</p>
       {/each}
-    {/if}
-
-    <form class="newpeer" onsubmit={startDirect}>
-      <input class="field slim" bind:value={newPeer} placeholder="Message a user…" />
-    </form>
-
-    {#if app.joined.length > 0}
-      <p class="group">Joined</p>
-      {#each app.joined as room (room)}
-        <div class="entry" class:active={open?.kind === "room" && open.name === room}>
-          <button class="pick" onclick={() => openRoom(room)}>
-            <span class="name">{room}</span>
-          </button>
-          <button class="leave btn quiet small" onclick={() => leave(room)} title="Leave">×</button>
-        </div>
-      {/each}
-    {/if}
-
-    <p class="group">All rooms</p>
-    {#each listed as room (room.name)}
-      <div class="entry" class:active={open?.kind === "room" && open.name === room.name}>
-        <button class="pick" onclick={() => openRoom(room.name)}>
-          <span class="name">{room.name}</span>
-          <span class="count num">{room.userCount.toLocaleString()}</span>
-        </button>
-      </div>
     {:else}
-      <p class="none">{app.rooms.length === 0 ? "Loading rooms…" : "No matches."}</p>
-    {/each}
+      <div class="pane-head">
+        <input class="field slim" bind:value={query} placeholder="Find a room…" />
+      </div>
+
+      {#if app.joined.length > 0}
+        <p class="group">Joined</p>
+        {#each app.joined as room (room)}
+          <div class="entry" class:active={open?.kind === "room" && open.name === room}>
+            <button class="pick" onclick={() => openRoom(room)}>
+              <span class="name">{room}</span>
+            </button>
+            <button class="leave btn quiet small" onclick={() => leave(room)} title="Leave">×</button
+            >
+          </div>
+        {/each}
+      {/if}
+
+      <p class="group">All rooms</p>
+      {#each listed as room (room.name)}
+        <div class="entry" class:active={open?.kind === "room" && open.name === room.name}>
+          <button class="pick" onclick={() => openRoom(room.name)}>
+            <span class="name">{room.name}</span>
+            <span class="count num">{room.userCount.toLocaleString()}</span>
+          </button>
+        </div>
+      {:else}
+        <p class="none">{app.rooms.length === 0 ? "Loading rooms…" : "No matches."}</p>
+      {/each}
+    {/if}
   </aside>
 
   <section>
@@ -163,6 +201,42 @@
 </div>
 
 <style>
+  /* Rooms and people are different lists, so the pane switches between them
+     rather than stacking one above the other. */
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    /* The pane behind this is itself `--surface-2`, so the track has to step
+       away from it or the control reads as two words of plain text. Same
+       reason `.field` is overridden a few rules down. */
+    background: var(--surface);
+  }
+  .segbtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 1;
+    padding: 4px 10px;
+    border-radius: calc(var(--radius-sm) - 2px);
+    font-size: 12px;
+    color: var(--text-3);
+    transition: background var(--fast), color var(--fast);
+  }
+  .segbtn.on {
+    background: var(--surface-1);
+    color: var(--text-1);
+  }
+  .segbtn .pip {
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--accent-quiet);
+    color: var(--accent);
+    font-size: 10.5px;
+  }
+
   .view {
     display: grid;
     grid-template-columns: 200px minmax(0, 1fr);

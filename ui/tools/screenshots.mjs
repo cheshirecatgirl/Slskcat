@@ -235,7 +235,7 @@ const run = async () => {
     await page.click('button[role="tab"]:has-text("Downloads")');
     await page.waitForTimeout(200);
 
-    // 5. Rooms
+    // 5. Messages: the rooms list
     await page.evaluate(() => {
       window.__emit({
         type: "roomList",
@@ -248,7 +248,7 @@ const run = async () => {
         ],
       });
     });
-    await page.click('button:has-text("Rooms")');
+    await page.click('button:has-text("Messages")');
     await page.waitForTimeout(300);
     await page.click('button:has-text("nicotine")');
     await page.evaluate(() => {
@@ -270,6 +270,9 @@ const run = async () => {
       dm("cassette_ghost", "the 24bit one is the better transfer fwiw");
     });
     await page.waitForTimeout(300);
+    // People and rooms are separate lists now, so the thread is under Users.
+    await page.click('.segbtn:has-text("Users")');
+    await page.waitForTimeout(200);
     await page.click('.entry:has-text("cassette_ghost") .pick');
     await page.waitForTimeout(200);
     await page.fill('section input.field', "got it, thanks — grabbing now");

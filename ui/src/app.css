@@ -97,7 +97,7 @@
   --space-a: #cf7a2e66;
   --space-b: #e0574f3d;
 }
-[data-space="rooms"] {
+[data-space="messages"] {
   --accent: #ec6f9e;
   --accent-hover: #f382ad;
   --accent-quiet: #ec6f9e1f;
