@@ -312,6 +312,14 @@ pub struct Config {
     pub shared_dirs: Vec<PathBuf>,
     /// Concurrent uploads served before further requests are queued.
     pub upload_slots: usize,
+    /// Downloads allowed to run at once.
+    ///
+    /// The protocol library gives every transfer its own thread and imposes no
+    /// limit of its own, so without a cap here a folder of two hundred files
+    /// becomes two hundred threads and two hundred sockets. Holding the extras
+    /// back also keeps each running transfer's share of the line larger, which
+    /// is what makes three finish sooner than two hundred started at once.
+    pub download_slots: usize,
     /// How long a search keeps collecting replies before it is closed.
     #[serde(with = "seconds")]
     pub search_timeout: Duration,
@@ -327,6 +335,7 @@ impl Default for Config {
             download_dir: default_download_dir(),
             shared_dirs: Vec::new(),
             upload_slots: 2,
+            download_slots: 3,
             search_timeout: Duration::from_secs(12),
         }
     }
@@ -347,6 +356,9 @@ impl Config {
         }
         if self.upload_slots == 0 {
             self.upload_slots = 1;
+        }
+        if self.download_slots == 0 {
+            self.download_slots = 1;
         }
         if self.search_timeout.is_zero() {
             self.search_timeout = Duration::from_secs(12);

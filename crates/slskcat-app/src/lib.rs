@@ -241,6 +241,11 @@ fn set_upload_slots(app: State<'_, App>, slots: usize) -> Result<(), String> {
     app.send(Command::SetUploadSlots(slots))
 }
 
+#[tauri::command]
+fn set_download_slots(app: State<'_, App>, slots: usize) -> Result<(), String> {
+    app.send(Command::SetDownloadSlots(slots))
+}
+
 /// Build and run the application.
 ///
 /// # Panics
@@ -280,6 +285,7 @@ pub fn run() {
             send_private_message,
             set_shared_dirs,
             set_upload_slots,
+            set_download_slots,
         ])
         .run(tauri::generate_context!())
         .expect("starting the slsk.cat window");

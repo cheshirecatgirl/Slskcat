@@ -47,6 +47,8 @@ pub struct Settings {
     pub download_dir: PathBuf,
     pub shared_dirs: Vec<PathBuf>,
     pub upload_slots: usize,
+    /// Downloads allowed to run at once.
+    pub download_slots: usize,
     pub search_timeout_secs: u64,
     /// Standing wishes. Persisted because a wish is only useful across
     /// sessions — the point is that it keeps looking after you stop.
@@ -70,6 +72,7 @@ impl Default for Settings {
             download_dir: config.download_dir,
             shared_dirs: Vec::new(),
             upload_slots: config.upload_slots,
+            download_slots: config.download_slots,
             search_timeout_secs: config.search_timeout.as_secs(),
             wishlist: Vec::new(),
             keychain_available: false,
@@ -105,6 +108,7 @@ impl Settings {
             download_dir: self.download_dir.clone(),
             shared_dirs: self.shared_dirs.clone(),
             upload_slots: self.upload_slots,
+            download_slots: self.download_slots,
             search_timeout: Duration::from_secs(self.search_timeout_secs),
         }
         // The core repairs anything blank; doing it here too means the

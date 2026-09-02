@@ -24,6 +24,7 @@
     try {
       if (change.sharedDirs) await core.setSharedDirs(next.sharedDirs);
       if (change.uploadSlots !== undefined) await core.setUploadSlots(next.uploadSlots);
+      if (change.downloadSlots !== undefined) await core.setDownloadSlots(next.downloadSlots);
     } catch (error) {
       app.notify(String(error), "danger");
     }
@@ -85,6 +86,11 @@
   function onSlots(event: Event) {
     const value = Number((event.currentTarget as HTMLInputElement).value);
     void update({ uploadSlots: value });
+  }
+
+  function onDownloadSlots(event: Event) {
+    const value = Number((event.currentTarget as HTMLInputElement).value);
+    void update({ downloadSlots: value });
   }
 </script>
 
@@ -162,6 +168,24 @@
             onchange={onSlots}
           />
           <span class="num value">{settings.uploadSlots}</span>
+        </div>
+      </section>
+
+      <section>
+        <h3>Download slots</h3>
+        <p class="hint">
+          Files fetched at once. The rest wait their turn, and a peer that has
+          queued you holds its slot until it starts sending.
+        </p>
+        <div class="slots">
+          <input
+            type="range"
+            min="1"
+            max="10"
+            value={settings.downloadSlots}
+            onchange={onDownloadSlots}
+          />
+          <span class="num value">{settings.downloadSlots}</span>
         </div>
       </section>
 

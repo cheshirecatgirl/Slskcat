@@ -121,6 +121,8 @@ export interface Settings {
   downloadDir: string;
   sharedDirs: string[];
   uploadSlots: number;
+  /** Downloads allowed to run at once. */
+  downloadSlots: number;
   searchTimeoutSecs: number;
   wishlist: string[];
   keychainAvailable: boolean;
@@ -141,6 +143,7 @@ export function defaultSettings(): Settings {
     downloadDir: "",
     sharedDirs: [],
     uploadSlots: 2,
+    downloadSlots: 3,
     searchTimeoutSecs: 12,
     wishlist: [],
     keychainAvailable: true,
@@ -168,6 +171,7 @@ export function hydrateSettings(raw: Partial<Settings> | null | undefined): Sett
     downloadDir: from.downloadDir ?? base.downloadDir,
     sharedDirs: from.sharedDirs ?? base.sharedDirs,
     uploadSlots: from.uploadSlots ?? base.uploadSlots,
+    downloadSlots: from.downloadSlots ?? base.downloadSlots,
     searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
     wishlist: from.wishlist ?? base.wishlist,
     keychainAvailable: from.keychainAvailable ?? base.keychainAvailable,

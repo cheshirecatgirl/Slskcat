@@ -21,7 +21,7 @@ use soulseek_rs::{
     UploadInfo, UploadStatus, UserStatus,
 };
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -95,6 +95,12 @@ pub struct LiveBackend {
     wishes: HashMap<String, Wish>,
     /// Last interval announced to the interface, so it is sent only on change.
     wishlist_interval: Option<Duration>,
+    /// Downloads accepted but not yet handed to the library, oldest first.
+    ///
+    /// Held here rather than started immediately so `download_slots` means
+    /// something: the library starts a thread per transfer and caps nothing,
+    /// so the cap has to live on this side of it.
+    waiting: VecDeque<(TransferId, u64)>,
 }
 
 impl LiveBackend {
@@ -196,6 +202,10 @@ impl LiveBackend {
     fn disconnect(&mut self, reason: Disconnect, out: &EventSink) {
         self.stop_all_searches();
         self.transfers.clear();
+        // Requests that never started belong to the session that accepted
+        // them; carrying them into the next one would resume downloads the
+        // user never asked this session for.
+        self.waiting.clear();
         self.pending_browses.clear();
         self.watched_users.clear();
         self.shares = None;
@@ -384,24 +394,58 @@ impl LiveBackend {
         }
     }
 
+    /// Transfers currently held by the library, which is what a slot counts.
+    ///
+    /// A download sitting in the peer's own queue still holds its thread and
+    /// its connection, so it counts. That is the honest reading, even though
+    /// it means three peers all queueing us stalls the fourth: no client can
+    /// make a peer serve us sooner, and pretending otherwise would just start
+    /// transfers that cannot move.
+    fn running_downloads(&self) -> usize {
+        self.transfers
+            .values()
+            .filter(|watch| watch.state.is_live())
+            .count()
+    }
+
     fn start_download(&mut self, username: String, path: String, size: u64, out: &EventSink) {
-        let Some(client) = self.client(out) else {
+        if self.client(out).is_none() {
             return;
-        };
-        let id = TransferId::new(username.clone(), path.clone());
+        }
+        let id = TransferId::new(username, path);
         if self
             .transfers
             .get(&id)
             .is_some_and(|watch| watch.state.is_live())
+            || self.waiting.iter().any(|(waiting, _)| *waiting == id)
         {
             out.warn(format!("Already downloading {}.", id.path));
             return;
         }
 
+        if self.running_downloads() >= self.config.download_slots {
+            // Reported as queued because that is what it is. The interface
+            // draws no distinction between waiting for a slot here and waiting
+            // in the peer's queue, and from the reader's side there is none.
+            self.waiting.push_back((id.clone(), size));
+            out.emit(Event::TransferUpdated {
+                id,
+                state: TransferState::Queued { place: None },
+            });
+            return;
+        }
+        self.launch_download(id, size, out);
+    }
+
+    /// Hand one download to the library, having decided it may run.
+    fn launch_download(&mut self, id: TransferId, size: u64, out: &EventSink) {
+        let Some(client) = self.client(out) else {
+            return;
+        };
         let destination = self.config.download_dir.clone();
         match client.download(
-            path,
-            username,
+            id.path.clone(),
+            id.username.clone(),
             size,
             destination.to_string_lossy().into_owned(),
         ) {
@@ -457,6 +501,17 @@ impl LiveBackend {
         for id in closed {
             self.transfers.remove(&id);
         }
+        self.fill_free_slots(out);
+    }
+
+    /// Start whatever the freed slots allow, oldest request first.
+    fn fill_free_slots(&mut self, out: &EventSink) {
+        while self.running_downloads() < self.config.download_slots {
+            let Some((id, size)) = self.waiting.pop_front() else {
+                return;
+            };
+            self.launch_download(id, size, out);
+        }
     }
 
     /// Snapshot of every transfer, for a UI rebuilding its list.
@@ -500,6 +555,18 @@ impl LiveBackend {
     }
 
     fn cancel_transfer(&mut self, id: TransferId, out: &EventSink) {
+        // A download still waiting for a slot was never handed over, so there
+        // is nothing for the library to forget — dropping it here is the whole
+        // cancellation.
+        let was_waiting = self.waiting.iter().any(|(waiting, _)| *waiting == id);
+        self.waiting.retain(|(waiting, _)| *waiting != id);
+        if was_waiting {
+            out.emit(Event::TransferUpdated {
+                id,
+                state: TransferState::Cancelled,
+            });
+            return;
+        }
         if let Some(client) = self.client(out) {
             // A false result means the library had already retired it, which
             // is the state being asked for, so it is not an error.
@@ -686,6 +753,14 @@ impl Backend for LiveBackend {
             }
 
             Command::SetSharedDirs(dirs) => self.set_shares(dirs, out),
+            Command::SetDownloadSlots(slots) => {
+                // Never interrupts a transfer already running: lowering the
+                // limit stops new ones starting and the excess drains away as
+                // they finish. Raising it takes effect at once.
+                self.config.download_slots = slots.max(1);
+                self.fill_free_slots(out);
+            }
+
             Command::SetUploadSlots(slots) => {
                 self.config.upload_slots = slots;
                 if let Some(client) = self.client(out) {
@@ -877,6 +952,121 @@ mod tests {
     fn sink() -> (EventSink, mpsc::Receiver<Event>) {
         let (tx, rx) = mpsc::channel();
         (EventSink::new(tx), rx)
+    }
+
+    /// A transfer in a given state, with a channel nothing will ever send on.
+    /// Enough for the slot arithmetic, which only reads `state`.
+    fn watching(state: TransferState) -> TransferWatch {
+        let (_, updates) = mpsc::channel();
+        TransferWatch {
+            updates,
+            size: 1,
+            destination: PathBuf::new(),
+            state,
+        }
+    }
+
+    #[test]
+    fn a_slot_is_held_by_anything_that_can_still_move() {
+        let mut backend = LiveBackend::new();
+        for (name, state) in [
+            ("queued", TransferState::Queued { place: None }),
+            (
+                "active",
+                TransferState::Active {
+                    transferred: 1,
+                    total: 2,
+                    bytes_per_sec: 1.0,
+                },
+            ),
+            (
+                "paused",
+                TransferState::Paused {
+                    transferred: 1,
+                    total: 2,
+                },
+            ),
+            ("done", TransferState::Completed),
+            ("gone", TransferState::Cancelled),
+            ("failed", TransferState::Failed { reason: None }),
+        ] {
+            backend
+                .transfers
+                .insert(TransferId::new("peer", name), watching(state));
+        }
+
+        // Queued counts: the peer has it and the thread is alive, even though
+        // no bytes are moving. The three terminal ones do not.
+        assert_eq!(backend.running_downloads(), 3);
+    }
+
+    #[test]
+    fn a_full_set_of_slots_leaves_the_queue_alone() {
+        let (out, rx) = sink();
+        let mut backend = LiveBackend::new();
+        backend.config.download_slots = 1;
+        backend.transfers.insert(
+            TransferId::new("peer", "running.flac"),
+            watching(TransferState::Queued { place: None }),
+        );
+        let held = TransferId::new("peer", "waiting.flac");
+        backend.waiting.push_back((held.clone(), 10));
+
+        backend.fill_free_slots(&out);
+
+        assert_eq!(backend.waiting.len(), 1, "the slot was taken, so it waits");
+        assert!(rx.try_recv().is_err(), "and nothing was reported");
+    }
+
+    #[test]
+    fn cancelling_a_download_that_never_started_needs_no_connection() {
+        // The library was never told about it, so there is nothing to ask it
+        // to forget — and asking would fail anyway with no client.
+        let (out, rx) = sink();
+        let mut backend = LiveBackend::new();
+        let id = TransferId::new("peer", "waiting.flac");
+        backend.waiting.push_back((id.clone(), 10));
+
+        backend.execute(Command::CancelTransfer(id.clone()), &out);
+
+        assert!(backend.waiting.is_empty());
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(Event::TransferUpdated {
+                id: reported,
+                state: TransferState::Cancelled,
+            }) if reported == id
+        ));
+        assert!(
+            rx.try_recv().is_err(),
+            "and no warning about not being connected"
+        );
+    }
+
+    #[test]
+    fn zero_download_slots_would_stall_everything_so_it_is_refused() {
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+
+        backend.execute(Command::SetDownloadSlots(0), &out);
+
+        assert_eq!(backend.config.download_slots, 1);
+    }
+
+    #[test]
+    fn a_disconnect_forgets_downloads_that_never_started() {
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+        backend
+            .waiting
+            .push_back((TransferId::new("peer", "waiting.flac"), 10));
+
+        backend.disconnect(Disconnect::Requested, &out);
+
+        assert!(
+            backend.waiting.is_empty(),
+            "a queue belongs to the session that accepted it"
+        );
     }
 
     #[test]

@@ -63,4 +63,5 @@ export const core = {
 
   setSharedDirs: (dirs: string[]) => invoke<void>("set_shared_dirs", { dirs }),
   setUploadSlots: (slots: number) => invoke<void>("set_upload_slots", { slots }),
+  setDownloadSlots: (slots: number) => invoke<void>("set_download_slots", { slots }),
 };

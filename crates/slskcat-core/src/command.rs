@@ -64,6 +64,10 @@ pub enum Command {
     SetSharedDirs(Vec<PathBuf>),
     /// Change how many uploads are served concurrently.
     SetUploadSlots(usize),
+    /// Change how many downloads may run at once. Lowering it never
+    /// interrupts a transfer already running; the excess drains as they
+    /// finish.
+    SetDownloadSlots(usize),
 }
 
 /// Hands out [`SearchId`]s that are unique within a run.
