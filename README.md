@@ -157,14 +157,20 @@ cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 ```
 
-Running and packaging go through the Tauri CLI, from the app crate — it is
-`cargo tauri`, a cargo subcommand, not a `tauri` on your `PATH`:
+Running and packaging go through the Tauri CLI. It is `cargo tauri`, a cargo
+subcommand — there is no `tauri` on your `PATH` — and it finds
+`crates/slskcat-app/tauri.conf.json` itself, so the repo root is fine:
 
 ```bash
-cd crates/slskcat-app
 cargo tauri dev                   # run it; starts Vite itself
 cargo tauri build                 # package it
 ```
+
+The CLI is also on npm as `@tauri-apps/cli`, which ships prebuilt binaries
+instead of compiling one. Either is the same program; `pnpm dlx
+@tauri-apps/cli@2 build` works without installing anything. (The bare `tauri`
+package on npm is the abandoned pre-1.0 one, last published at 0.15.0. It does
+not understand this project.)
 
 **Use the CLI, not `cargo run`.** The CLI enables the `custom-protocol`
 feature, and that is what compiles `ui/dist` into the binary. Without it the
