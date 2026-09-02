@@ -17,8 +17,8 @@ use crate::model::{
 };
 
 use soulseek_rs::{
-    Client, ClientSettings, DownloadStatus, RoomEvent, SearchResult, SessionLoss, UploadInfo,
-    UploadStatus, UserStatus,
+    Client, ClientSettings, DownloadStatus, RoomEvent, SearchResult, SessionLoss, SoulseekRs,
+    UploadInfo, UploadStatus, UserStatus,
 };
 
 use std::collections::HashMap;
@@ -28,6 +28,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+
+/// What a refused login says, expanded into the two things that actually
+/// cause it.
+///
+/// Soulseek has no registration step: the first sign-in with an unused name
+/// claims it. So "the name is new, the password must be wrong" is not sound
+/// reasoning — a name typed once before, with a different password or none at
+/// all, is now taken and will keep refusing the right one. Saying so here
+/// saves the reader from concluding they mistyped a password they did not.
+const REJECTED: &str = "The server rejected that username or password. Soulseek claims any unused \
+                    name on first sign-in, so a name already used with a different password \
+                    will keep refusing this one.";
 
 /// A search that is still collecting replies.
 struct ActiveSearch {
@@ -142,9 +154,27 @@ impl LiveBackend {
 
         match client.login() {
             Ok(true) => {}
-            Ok(false) => {
+            // The same verdict arriving by two routes. The server does say
+            // which of the two it is — the login response carries `INVALIDPASS`
+            // or `INVALIDUSERNAME` after the success flag — but the library
+            // returns as soon as it reads the flag and never reads the string,
+            // so the distinction is gone before it reaches us. Naming both
+            // causes is the best we can do without forking the library.
+            Ok(false) | Err(SoulseekRs::AuthenticationFailed) => {
                 out.emit(Event::LoginFailed {
-                    reason: "The server rejected that username or password.".into(),
+                    reason: REJECTED.into(),
+                });
+                return;
+            }
+            // Distinct from a rejection: the connection stood up and the login
+            // went out, and nothing came back. Telling someone their password
+            // is wrong when the server simply went quiet sends them off
+            // resetting credentials that were never the problem.
+            Err(SoulseekRs::Timeout) => {
+                out.emit(Event::LoginFailed {
+                    reason: "The server accepted the connection but never answered the login. \
+                             It may be overloaded; try again in a minute."
+                        .into(),
                 });
                 return;
             }
