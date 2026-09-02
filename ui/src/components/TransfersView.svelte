@@ -1,15 +1,14 @@
 <script lang="ts">
   import { core } from "../lib/core";
-  import { app } from "../lib/state.svelte";
+  import { app, isLiveTransfer, isLiveUpload } from "../lib/state.svelte";
   import { bytes, eta, fileName, rate } from "../lib/format";
   import type { TransferState, UploadState } from "../lib/types";
 
   let tab = $state<"down" | "up">("down");
   let showDone = $state(true);
 
-  const liveDown = (s: TransferState) =>
-    s.type === "queued" || s.type === "active" || s.type === "paused";
-  const liveUp = (s: UploadState) => s.type === "queued" || s.type === "active";
+  const liveDown = isLiveTransfer;
+  const liveUp = isLiveUpload;
 
   const downloads = $derived.by(() => {
     const all = app.transferList;
@@ -107,11 +106,6 @@
     }
   }
 
-  function clearFinished() {
-    for (const t of app.transferList.filter((t) => !liveDown(t.state))) {
-      void core.cancelTransfer(t.username, t.path);
-    }
-  }
 </script>
 
 <div class="view">
@@ -143,11 +137,9 @@
       <input type="checkbox" bind:checked={showDone} />
       <span>Show finished</span>
     </label>
-    {#if tab === "down"}
-      <button class="btn quiet small" disabled={finished === 0} onclick={clearFinished}>
-        Clear finished
-      </button>
-    {/if}
+    <button class="btn quiet small" disabled={finished === 0} onclick={() => app.clearFinished()}>
+      Clear finished
+    </button>
   </header>
 
   {#if tab === "down"}
