@@ -19,7 +19,8 @@ close most of that gap** — that is the job.
 - The credential-store round trip, against a real `gnome-keyring`.
 - The share guard, including a symlinked root resolving into a refused location.
 - `cargo tauri build --bundles deb` — a 2.0 MB package installing
-  `/usr/bin/slskcat`.
+  `/usr/bin/slskcat`. Measured before `custom-protocol` was declared, so that
+  bundle carried no frontend; the command works, the artefact needs remeasuring.
 - Every screen, both colour schemes, in **headless Chromium** via
   `ui/tools/screenshots.mjs`.
 - `cargo audit` and `pnpm audit` — zero vulnerabilities.

@@ -150,20 +150,34 @@ system dependencies (`libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libssl-dev`,
 
 ```bash
 pnpm --dir ui install
+cargo install tauri-cli --version "^2" --locked
 
-cargo test                        # 54 tests + 2 keyring-gated
+cargo test                        # 59 tests + 2 keyring-gated
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
+```
 
-cargo tauri dev                   # run it
+Running and packaging go through the Tauri CLI, from the app crate — it is
+`cargo tauri`, a cargo subcommand, not a `tauri` on your `PATH`:
+
+```bash
+cd crates/slskcat-app
+cargo tauri dev                   # run it; starts Vite itself
 cargo tauri build                 # package it
 ```
 
-`cargo tauri build --bundles deb` is verified: it produces a 2.0 MB `.deb`
-carrying the binary, icons and a desktop entry, depending only on
-`libwebkit2gtk-4.1-0` and `libgtk-3-0`. The Windows and macOS bundles are
-configured (`.ico` and `.icns` are generated and wired up) but cannot be built
-or verified from Linux.
+**Use the CLI, not `cargo run`.** The CLI enables the `custom-protocol`
+feature, and that is what compiles `ui/dist` into the binary. Without it the
+window is pointed at `devUrl` instead, in every profile — `cargo run
+-p slskcat-app`, release included, needs a dev server running or it opens
+blank.
+
+`cargo tauri build --bundles deb` produces a ~2 MB `.deb` carrying the binary,
+icons and a desktop entry, depending only on `libwebkit2gtk-4.1-0` and
+`libgtk-3-0`. That was measured before `custom-protocol` was declared, so the
+size will have grown by the frontend and the bundle has not been re-verified
+since. The Windows and macOS bundles are configured (`.ico` and `.icns` are
+generated and wired up) but cannot be built or verified from Linux.
 
 `.github/workflows/ci.yml` runs the same checks on every push, in three jobs:
 Rust (fmt, clippy with warnings denied, tests), frontend (typecheck and
