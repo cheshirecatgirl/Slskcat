@@ -1,4 +1,55 @@
 /*
+ * Typefaces, carried in the bundle rather than fetched.
+ *
+ * Both are variable fonts under the SIL Open Font License; see fonts/LICENSE.
+ * They are served from the app's own origin because a webfont CDN would
+ * announce the user's address to a third party on every launch, which is not
+ * a trade a Soulseek client should be making for a typeface. The CSP would
+ * refuse the request anyway — `default-src 'self'` and no `font-src` — so a
+ * CDN link would simply render nothing.
+ *
+ * Only Latin and Latin Extended are bundled. Usernames and paths on this
+ * network arrive in every script there is, and the stack below falls through
+ * to the system font for the rest rather than carrying megabytes to cover it.
+ *
+ * `swap` rather than `block`: the interface is legible in the fallback, and a
+ * blank window while a local file loads would be a worse trade than one frame
+ * of the wrong face.
+ */
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(./fonts/instrument-sans-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(./fonts/instrument-sans-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url(./fonts/jetbrains-mono-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url(./fonts/jetbrains-mono-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
  * slsk.cat design tokens — Arc-inspired.
  *
  * The organising idea is borrowed from Arc: the window is a coloured field,
@@ -59,9 +110,12 @@
   --slow: 260ms cubic-bezier(0.2, 0, 0.15, 1);
   --spring: 420ms cubic-bezier(0.34, 1.4, 0.64, 1);
 
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* The system stack stays behind each one: it is the fallback for scripts
+     the bundled subsets do not cover, not a second choice of design. */
+  --font: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, monospace;
 
   --sidebar-w: 216px;
   --gap: 8px;
@@ -155,6 +209,10 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
+  /* Instrument Sans ships contextual alternates that tidy letter pairs at
+     small sizes; browsers enable them by default but WebKitGTK has been
+     inconsistent about it, so it is asked for explicitly. */
+  font-feature-settings: "calt" 1;
   font-size: 13.5px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
