@@ -90,7 +90,14 @@ fn start_core(app: &AppHandle) -> Commander {
 /// describe a configuration that was actually used to connect.
 #[tauri::command]
 fn connect(app: State<'_, App>, handle: AppHandle, settings: Settings) -> Result<Settings, String> {
-    let config = settings.to_config();
+    let mut config = settings.to_config();
+    // Where interrupted transfers are remembered. The core has no idea where
+    // this application keeps its files, so it is told.
+    config.state_file = handle
+        .path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("transfers.json"));
     app.send(Command::Connect(Box::new(config)))?;
     // The wishlist is not part of the core's Config, so it is restated on
     // every sign-in; otherwise a saved wish would sit idle until edited.

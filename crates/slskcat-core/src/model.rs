@@ -325,6 +325,11 @@ pub struct Config {
     pub search_timeout: Duration,
     /// Route the session through a proxy, or `None` to connect directly.
     pub proxy: Option<crate::proxy::Proxy>,
+    /// Where to remember transfers between runs, or `None` not to.
+    ///
+    /// The core cannot work this path out for itself — it belongs to whatever
+    /// is hosting it — so it is given one or does without.
+    pub state_file: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -340,6 +345,7 @@ impl Default for Config {
             download_slots: 4,
             search_timeout: Duration::from_secs(12),
             proxy: None,
+            state_file: None,
         }
     }
 }

@@ -22,6 +22,7 @@ use soulseek_rs::{
 };
 
 use crate::proxy::Relay;
+use crate::recovery::TransferSnapshot;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -100,6 +101,17 @@ pub struct LiveBackend {
     /// The loopback stand-in the session is running behind, if a proxy is in
     /// use. Dropped on disconnect, which stops it.
     relay: Option<Relay>,
+    /// Downloads paused before they ever started.
+    ///
+    /// A transfer still waiting for a slot was never given to the library, so
+    /// the library cannot pause it — it has never heard of it. Holding it here
+    /// is what pausing means at that stage, and it is the same answer for a
+    /// download restored from the last run.
+    held: HashMap<TransferId, u64>,
+    /// Whether anything worth remembering has changed since the last write.
+    dirty: bool,
+    /// When the last write happened, so progress does not drive the disk.
+    saved: Option<Instant>,
     /// Downloads accepted but not yet handed to the library, oldest first.
     ///
     /// Held here rather than started immediately so `download_slots` means
@@ -229,15 +241,18 @@ impl LiveBackend {
         self.client = Some(Arc::new(client));
         self.config = config;
         out.emit(Event::Connected { username });
+        // After the session exists, because a restored transfer needs one.
+        self.restore(out);
     }
 
     fn disconnect(&mut self, reason: Disconnect, out: &EventSink) {
         self.stop_all_searches();
         self.transfers.clear();
-        // Requests that never started belong to the session that accepted
-        // them; carrying them into the next one would resume downloads the
-        // user never asked this session for.
+        // Written before the queues are dropped, so a session that ends —
+        // cleanly or not — leaves behind what it was in the middle of.
+        self.persist();
         self.waiting.clear();
+        self.held.clear();
         // Stops the relay's listeners. A session that reconnects without a
         // proxy must not still have one standing.
         self.relay = None;
@@ -463,13 +478,16 @@ impl LiveBackend {
             // draws no distinction between waiting for a slot here and waiting
             // in the peer's queue, and from the reader's side there is none.
             self.waiting.push_back((id.clone(), size));
+            self.dirty = true;
             out.emit(Event::TransferUpdated {
                 id,
                 state: TransferState::Queued { place: None },
             });
+            self.persist();
             return;
         }
         self.launch_download(id, size, out);
+        self.persist();
     }
 
     /// Hand one download to the library, having decided it may run.
@@ -504,11 +522,18 @@ impl LiveBackend {
     /// Forward every progress update that has arrived, for every transfer.
     fn drain_transfers(&mut self, out: &EventSink) {
         let mut closed = Vec::new();
+        let mut dirty = false;
+        let mut settled = false;
         for (id, watch) in &mut self.transfers {
             loop {
                 match watch.updates.try_recv() {
                     Ok(status) => {
+                        let was_live = watch.state.is_live();
                         watch.state = convert_status(&status);
+                        // A transfer leaving the live set is a change worth
+                        // recording now rather than at the next tick.
+                        settled |= was_live && !watch.state.is_live();
+                        dirty = true;
                         out.emit(Event::TransferUpdated {
                             id: id.clone(),
                             state: watch.state.clone(),
@@ -533,14 +558,128 @@ impl LiveBackend {
                 }
             }
         }
+        let ended = !closed.is_empty();
         for id in closed {
             self.transfers.remove(&id);
+        }
+        self.dirty |= dirty;
+        self.fill_free_slots(out);
+
+        if settled || ended {
+            self.persist();
+            return;
+        }
+
+        // Progress is paced; a transfer that started, finished or died is
+        // written straight away, because that is the part worth having.
+        if self.dirty && self.saved.is_none_or(|at| at.elapsed() >= Self::SAVE_EVERY) {
+            self.persist();
+        }
+    }
+
+    /// How often progress alone is allowed to reach the disk.
+    ///
+    /// A transfer reports several times a second and there may be four of
+    /// them; writing on each would be a steady stream of rewrites to record
+    /// bytes that are already in the file being written. State *changes* are
+    /// written at once regardless — this only paces the rest.
+    const SAVE_EVERY: Duration = Duration::from_secs(10);
+
+    /// Write what is in flight, if there is somewhere to write it.
+    ///
+    /// Failure is deliberately quiet. Not being able to remember a transfer
+    /// costs the ability to resume it later; saying so mid-download would
+    /// interrupt the thing it is trying to protect.
+    fn persist(&mut self) {
+        let Some(path) = self.config.state_file.clone() else {
+            return;
+        };
+        let mut snapshots: Vec<TransferSnapshot> = self
+            .transfers
+            .iter()
+            .filter(|(_, watch)| watch.state.is_live())
+            .map(|(id, watch)| TransferSnapshot {
+                id: id.clone(),
+                size: watch.size,
+                state: watch.state.clone(),
+                destination: watch.destination.clone(),
+            })
+            .collect();
+
+        // Queued and held downloads are in flight as far as the user is
+        // concerned: they asked for them and they have not happened yet.
+        let waiting = self.waiting.iter().map(|(id, size)| (id, *size, false));
+        let held = self.held.iter().map(|(id, size)| (id, *size, true));
+        for (id, size, paused) in waiting.chain(held) {
+            snapshots.push(TransferSnapshot {
+                id: id.clone(),
+                size,
+                state: if paused {
+                    TransferState::Paused {
+                        transferred: 0,
+                        total: size,
+                    }
+                } else {
+                    TransferState::Queued { place: None }
+                },
+                destination: self.config.download_dir.clone(),
+            });
+        }
+
+        let _ = crate::recovery::save(&path, &snapshots);
+        self.dirty = false;
+        self.saved = Some(Instant::now());
+    }
+
+    /// Put back what the last run was in the middle of.
+    ///
+    /// Nothing is restarted here: each is queued, or held if it was paused,
+    /// and the slot limit decides when it moves. The bytes already on disk are
+    /// not re-fetched either — the library reads the part file it left behind
+    /// and asks the peer to start past it.
+    fn restore(&mut self, out: &EventSink) {
+        let Some(path) = self.config.state_file.clone() else {
+            return;
+        };
+        let Ok(snapshots) = crate::recovery::load(&path) else {
+            out.warn("Could not read the interrupted transfers from last time.");
+            return;
+        };
+        for snapshot in snapshots {
+            let id = snapshot.id;
+            if self.transfers.contains_key(&id)
+                || self.held.contains_key(&id)
+                || self.waiting.iter().any(|(waiting, _)| *waiting == id)
+            {
+                continue;
+            }
+            let paused = matches!(snapshot.state, TransferState::Paused { .. });
+            let state = if paused {
+                TransferState::Paused {
+                    transferred: 0,
+                    total: snapshot.size,
+                }
+            } else {
+                TransferState::Queued { place: None }
+            };
+            if paused {
+                self.held.insert(id.clone(), snapshot.size);
+            } else {
+                self.waiting.push_back((id.clone(), snapshot.size));
+            }
+            out.emit(Event::TransferUpdated { id, state });
         }
         self.fill_free_slots(out);
     }
 
     /// Start whatever the freed slots allow, oldest request first.
     fn fill_free_slots(&mut self, out: &EventSink) {
+        // Without a session there is nothing to hand them to, and handing one
+        // over anyway pops it off the queue and loses it — the request was
+        // still wanted, it just cannot go yet.
+        if self.client.is_none() {
+            return;
+        }
         while self.running_downloads() < self.config.download_slots {
             let Some((id, size)) = self.waiting.pop_front() else {
                 return;
@@ -589,12 +728,67 @@ impl LiveBackend {
         }));
     }
 
+    /// Pause a download, whether or not the library has heard of it.
+    fn pause_transfer(&mut self, id: TransferId, out: &EventSink) {
+        // A download still waiting for a slot is paused by keeping it out of
+        // the queue. Asking the library to pause something it was never given
+        // is what used to answer "that transfer could not be paused".
+        if let Some(index) = self.waiting.iter().position(|(waiting, _)| *waiting == id) {
+            let Some((_, size)) = self.waiting.remove(index) else {
+                return;
+            };
+            self.held.insert(id.clone(), size);
+            self.dirty = true;
+            out.emit(Event::TransferUpdated {
+                id,
+                state: TransferState::Paused {
+                    transferred: 0,
+                    total: size,
+                },
+            });
+            return;
+        }
+        if self.held.contains_key(&id) {
+            return;
+        }
+        if let Some(client) = self.client(out)
+            && !client.pause_download(&id.username, &id.path)
+        {
+            out.warn("That transfer could not be paused.");
+        }
+        self.dirty = true;
+    }
+
+    fn resume_transfer(&mut self, id: TransferId, out: &EventSink) {
+        if let Some(size) = self.held.remove(&id) {
+            // To the front: it was asked for again, and a resume that puts it
+            // behind everything queued since looks like nothing happened.
+            self.waiting.push_front((id.clone(), size));
+            self.dirty = true;
+            out.emit(Event::TransferUpdated {
+                id,
+                state: TransferState::Queued { place: None },
+            });
+            self.fill_free_slots(out);
+            return;
+        }
+        if let Some(client) = self.client(out)
+            && !client.resume_download(&id.username, &id.path)
+        {
+            out.warn("That transfer could not be resumed.");
+        }
+        self.dirty = true;
+    }
+
     fn cancel_transfer(&mut self, id: TransferId, out: &EventSink) {
         // A download still waiting for a slot was never handed over, so there
         // is nothing for the library to forget — dropping it here is the whole
         // cancellation.
-        let was_waiting = self.waiting.iter().any(|(waiting, _)| *waiting == id);
+        let was_waiting =
+            self.waiting.iter().any(|(waiting, _)| *waiting == id) || self.held.contains_key(&id);
         self.waiting.retain(|(waiting, _)| *waiting != id);
+        self.held.remove(&id);
+        self.dirty = true;
         if was_waiting {
             out.emit(Event::TransferUpdated {
                 id,
@@ -725,20 +919,8 @@ impl Backend for LiveBackend {
             } => {
                 self.start_download(username, path, size, out);
             }
-            Command::PauseTransfer(id) => {
-                if let Some(client) = self.client(out)
-                    && !client.pause_download(&id.username, &id.path)
-                {
-                    out.warn("That transfer could not be paused.");
-                }
-            }
-            Command::ResumeTransfer(id) => {
-                if let Some(client) = self.client(out)
-                    && !client.resume_download(&id.username, &id.path)
-                {
-                    out.warn("That transfer could not be resumed.");
-                }
-            }
+            Command::PauseTransfer(id) => self.pause_transfer(id, out),
+            Command::ResumeTransfer(id) => self.resume_transfer(id, out),
             Command::CancelTransfer(id) => self.cancel_transfer(id, out),
             Command::CancelUpload(id) => {
                 if let Some(client) = self.client(out)
@@ -1051,6 +1233,127 @@ mod tests {
 
         assert_eq!(backend.waiting.len(), 1, "the slot was taken, so it waits");
         assert!(rx.try_recv().is_err(), "and nothing was reported");
+    }
+
+    #[test]
+    fn a_download_waiting_for_a_slot_can_be_paused_and_resumed() {
+        // The library has never heard of a transfer still in the queue, so
+        // asking it to pause one used to answer "could not be paused".
+        let (out, rx) = sink();
+        let mut backend = LiveBackend::new();
+        let id = TransferId::new("peer", "waiting.flac");
+        backend.waiting.push_back((id.clone(), 4096));
+
+        backend.execute(Command::PauseTransfer(id.clone()), &out);
+
+        assert!(backend.waiting.is_empty(), "it leaves the queue");
+        assert_eq!(backend.held.get(&id), Some(&4096), "and is held instead");
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(Event::TransferUpdated {
+                state: TransferState::Paused {
+                    transferred: 0,
+                    total: 4096
+                },
+                ..
+            })
+        ));
+
+        // Resuming puts it back at the front: it was just asked for, and going
+        // behind everything queued since would look like nothing happened.
+        backend
+            .waiting
+            .push_back((TransferId::new("peer", "other.flac"), 1));
+        backend.execute(Command::ResumeTransfer(id.clone()), &out);
+
+        assert!(backend.held.is_empty());
+        assert_eq!(
+            backend.waiting.front().map(|(waiting, _)| waiting.clone()),
+            Some(id),
+            "and goes ahead of what was queued after it"
+        );
+    }
+
+    #[test]
+    fn a_held_download_is_cancellable_and_does_not_hold_a_slot() {
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+        let id = TransferId::new("peer", "held.flac");
+        backend.held.insert(id.clone(), 10);
+
+        assert_eq!(backend.running_downloads(), 0, "paused is not running");
+
+        backend.execute(Command::CancelTransfer(id.clone()), &out);
+        assert!(backend.held.is_empty());
+    }
+
+    #[test]
+    fn interrupted_transfers_come_back_queued_and_paused_as_they_were() {
+        let path =
+            std::env::temp_dir().join(format!("slskcat-restore-{}.json", std::process::id()));
+        let queued = TransferId::new("peer", "queued.flac");
+        let paused = TransferId::new("peer", "paused.flac");
+        crate::recovery::save(
+            &path,
+            &[
+                TransferSnapshot {
+                    id: queued.clone(),
+                    size: 100,
+                    state: TransferState::Active {
+                        transferred: 40,
+                        total: 100,
+                        bytes_per_sec: 1.0,
+                    },
+                    destination: PathBuf::from("/tmp"),
+                },
+                TransferSnapshot {
+                    id: paused.clone(),
+                    size: 200,
+                    state: TransferState::Paused {
+                        transferred: 10,
+                        total: 200,
+                    },
+                    destination: PathBuf::from("/tmp"),
+                },
+            ],
+        )
+        .unwrap();
+
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+        backend.config.state_file = Some(path.clone());
+        backend.restore(&out);
+        let _ = std::fs::remove_file(&path);
+
+        // What was moving is queued rather than restarted: the slot limit
+        // decides when it goes, and the bytes already on disk are not refetched.
+        assert!(backend.waiting.iter().any(|(id, _)| *id == queued));
+        assert!(backend.held.contains_key(&paused), "paused stays paused");
+    }
+
+    #[test]
+    fn restoring_twice_does_not_queue_anything_twice() {
+        let path = std::env::temp_dir().join(format!("slskcat-twice-{}.json", std::process::id()));
+        let id = TransferId::new("peer", "once.flac");
+        crate::recovery::save(
+            &path,
+            &[TransferSnapshot {
+                id,
+                size: 1,
+                state: TransferState::Queued { place: None },
+                destination: PathBuf::from("/tmp"),
+            }],
+        )
+        .unwrap();
+
+        let (out, _rx) = sink();
+        let mut backend = LiveBackend::new();
+        backend.config.state_file = Some(path.clone());
+        backend.restore(&out);
+        backend.restore(&out);
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(backend.waiting.len(), 1, "a reconnect must not double it");
     }
 
     #[test]

@@ -154,6 +154,9 @@ impl Settings {
             upload_slots: self.upload_slots,
             download_slots: self.download_slots,
             proxy: self.proxy.clone(),
+            // Filled in by `connect`, which is the only place that knows where
+            // this application keeps its files.
+            state_file: None,
             search_timeout: Duration::from_secs(self.search_timeout_secs),
         }
         // The core repairs anything blank; doing it here too means the
