@@ -49,6 +49,8 @@ jobs:
           cache-dependency-path: ui/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: ui
+      - run: pnpm test
+        working-directory: ui
       - run: pnpm build
         working-directory: ui
 
@@ -75,6 +77,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+        working-directory: ui
+
+      - name: Test
+        run: pnpm test
         working-directory: ui
 
       # `pnpm build` runs svelte-check before bundling, so this covers both

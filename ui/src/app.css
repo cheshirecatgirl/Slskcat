@@ -303,12 +303,22 @@ button {
   font-size: 12px;
 }
 
+/*
+ * A field reads against the panel it sits on, not against one particular
+ * panel.
+ *
+ * It used to be `--surface-2`, which is also what a settings card, the rooms
+ * pane and the messages pane are — so an input dropped into any of them was
+ * the colour of the thing holding it. Three views ended up overriding this
+ * rule locally before it was worth fixing here. The border is what separates
+ * it now, so it works on any surface and needs no override.
+ */
 .field {
   width: 100%;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
   transition: background var(--fast), border-color var(--fast), box-shadow var(--fast);

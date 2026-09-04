@@ -45,10 +45,22 @@ export class Search {
     this.query = query;
   }
 
+  /** Peer and path of every row held, so a repeat is recognised. */
+  #seen = new Set<string>();
+  /** Peers counted, so one answering twice is still one peer. */
+  #answered = new Set<string>();
+
   add(hits: SearchHit[]) {
     const incoming: ResultRow[] = [];
     for (const hit of hits) {
+      this.#answered.add(hit.username);
       for (const file of hit.files) {
+        // A peer can answer the same search more than once, and a reply can
+        // repeat a file already sent. Listing it twice reads as two copies of
+        // something there is only one of.
+        const seen = `${hit.username}\0${file.path}`;
+        if (this.#seen.has(seen)) continue;
+        this.#seen.add(seen);
         incoming.push({
           username: hit.username,
           freeSlots: hit.freeSlots,
@@ -60,9 +72,11 @@ export class Search {
         });
       }
     }
-    // Reassign rather than push: Svelte tracks the array reference.
-    this.rows = [...this.rows, ...incoming];
-    this.peers += hits.length;
+    if (incoming.length > 0) {
+      // Reassign rather than push: Svelte tracks the array reference.
+      this.rows = [...this.rows, ...incoming];
+    }
+    this.peers = this.#answered.size;
   }
 }
 
@@ -312,6 +326,10 @@ export class AppState {
         this.connected = false;
         this.connecting = false;
         this.resuming = false;
+        // Whatever ended the last session, the current story is this refusal.
+        // Leaving `displaced` set would keep a "go back online" button on
+        // screen next to the reason it just failed to.
+        this.displaced = false;
         this.loginError = event.data.reason;
         break;
 

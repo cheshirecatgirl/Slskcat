@@ -153,6 +153,7 @@ pnpm --dir ui install
 cargo install tauri-cli --version "^2" --locked
 
 cargo test                        # 88 tests + 2 keyring-gated
+pnpm --dir ui test                # 21 frontend tests
 cargo clippy --all-targets        # clean under pedantic lints
 pnpm --dir ui build               # typecheck + bundle
 ```

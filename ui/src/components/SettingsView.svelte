@@ -99,6 +99,23 @@
     void update({ uploadSlots: value });
   }
 
+  /**
+   * The scale being dragged towards, before it is applied.
+   *
+   * Applying it live made the control unusable: zooming the page moves and
+   * resizes the slider under the pointer that is dragging it, so the handle
+   * runs away from the cursor. The number beside it follows the drag instead,
+   * and the page changes once, when the drag ends.
+   */
+  let preview = $state<number | null>(null);
+
+  $effect(() => {
+    // The stored value winning again is how the preview ends: once the change
+    // has been written there is nothing left to preview.
+    void settings?.uiScale;
+    preview = null;
+  });
+
   function onDownloadSlots(event: Event) {
     const value = Number((event.currentTarget as HTMLInputElement).value);
     void update({ downloadSlots: value });
@@ -226,14 +243,10 @@
             max="200"
             step="10"
             value={settings.uiScale}
+            oninput={(event) => (preview = Number(event.currentTarget.value))}
             onchange={(event) => update({ uiScale: Number(event.currentTarget.value) })}
-            oninput={(event) => {
-              // Follows the drag so the size can be judged while choosing it;
-              // the write waits for the drag to end.
-              document.documentElement.style.zoom = `${event.currentTarget.value}%`;
-            }}
           />
-          <span class="num value">{settings.uiScale}%</span>
+          <span class="num value">{preview ?? settings.uiScale}%</span>
         </div>
       </section>
 
@@ -342,19 +355,12 @@
     gap: 8px;
     margin-top: 9px;
   }
-  /* `.field` is `width: 100%` on a `--surface-2` background, and the panel
-     these sit on is `--surface-2` too. Left alone that gives a select wide
-     enough to crush the row beside it, and inputs the same colour as the card
-     holding them. Both have to be undone here. */
+  /* `.field` is `width: 100%`, which in a flex row makes the select wide
+     enough to crush the field beside it. */
   .proxy .field {
     flex: 1;
     width: auto;
     min-width: 0;
-    background: var(--surface);
-    border-color: var(--line-soft);
-  }
-  .proxy .field:focus {
-    border-color: var(--accent);
   }
   .proxy .field.auto {
     flex: none;

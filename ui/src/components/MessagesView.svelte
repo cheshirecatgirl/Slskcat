@@ -359,9 +359,8 @@
     gap: 2px;
     padding: 2px;
     border-radius: var(--radius-sm);
-    /* The pane behind this is itself `--surface-2`, so the track has to step
-       away from it or the control reads as two words of plain text. Same
-       reason `.field` is overridden a few rules down. */
+    /* The pane behind this is `--surface-2`, so the track steps away from it
+       or the control reads as two words of plain text. */
     background: var(--surface);
   }
   .segbtn {
@@ -451,13 +450,9 @@
     padding: 11px 10px;
     background: var(--surface-2);
   }
-  /* The panel is itself `--surface-2`, which is what `.field` uses, so an
-     unmodified input would be invisible against it. */
   .field.slim {
     padding: 5px 9px;
     font-size: 12.5px;
-    background: var(--surface);
-    border-color: var(--line-soft);
   }
   .field.slim:focus {
     border-color: var(--accent);

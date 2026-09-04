@@ -228,13 +228,9 @@
     padding: 11px 10px;
     background: var(--surface-2);
   }
-  /* The panel is `--surface-2`, which is what `.field` uses, so an unmodified
-     input would be invisible against it. */
   .pane-head .field.slim {
     padding: 5px 9px;
     font-size: 12.5px;
-    background: var(--surface);
-    border-color: var(--line-soft);
   }
   .entry {
     display: flex;
