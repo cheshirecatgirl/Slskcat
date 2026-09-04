@@ -1,17 +1,21 @@
 # pnpm's settings live here, not in package.json.
 #
-# pnpm 11 stopped reading the `pnpm` field from package.json and only warns
-# that it ignored it — so `onlyBuiltDependencies` silently stopped applying,
-# esbuild's build script was refused, and `pnpm install` began exiting 1 with
-# ERR_PNPM_IGNORED_BUILDS. That failed `pnpm dev`, which pnpm runs an install
-# check ahead of, which failed `tauri dev`.
+# Two keys saying the same thing, because the setting was renamed and this
+# project is built on three machines running different pnpm versions.
 #
-# This file is read by pnpm 10 as well, so it is the one home that works on
-# both.
+#   pnpm 10  reads `onlyBuiltDependencies` (a list)
+#   pnpm 11  reads `allowBuilds` (a map) and treats the older key as legacy
 #
-# esbuild is the only dependency allowed to run a lifecycle script: it needs
-# one to place its platform binary. Nothing else does, and a package that can
-# run arbitrary code at install time is exactly the supply-chain surface worth
-# keeping shut.
+# pnpm 11 accepts both without complaint, so both stay until there is a reason
+# to believe nobody is on 10. Getting this wrong is not quiet: pnpm 11 refuses
+# the build, `pnpm install` exits 1 with ERR_PNPM_IGNORED_BUILDS, and because
+# `pnpm dev` runs an install check ahead of itself, `cargo tauri dev` fails at
+# the beforeDevCommand with nothing visibly wrong in the project.
+#
+# esbuild is the only dependency allowed to run a lifecycle script — it needs
+# one to place its platform binary. Nothing else here does, and install-time
+# code execution is the supply-chain surface worth keeping shut.
 onlyBuiltDependencies:
   - esbuild
+allowBuilds:
+  esbuild: true
