@@ -1,0 +1,17 @@
+# pnpm's settings live here, not in package.json.
+#
+# pnpm 11 stopped reading the `pnpm` field from package.json and only warns
+# that it ignored it — so `onlyBuiltDependencies` silently stopped applying,
+# esbuild's build script was refused, and `pnpm install` began exiting 1 with
+# ERR_PNPM_IGNORED_BUILDS. That failed `pnpm dev`, which pnpm runs an install
+# check ahead of, which failed `tauri dev`.
+#
+# This file is read by pnpm 10 as well, so it is the one home that works on
+# both.
+#
+# esbuild is the only dependency allowed to run a lifecycle script: it needs
+# one to place its platform binary. Nothing else does, and a package that can
+# run arbitrary code at install time is exactly the supply-chain surface worth
+# keeping shut.
+onlyBuiltDependencies:
+  - esbuild
