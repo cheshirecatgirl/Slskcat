@@ -99,6 +99,55 @@ describe("search results", () => {
   });
 });
 
+describe("closing a search", () => {
+  it("frees it and moves to another", () => {
+    // Searches were only ever added: every one ever run stayed in memory with
+    // all its rows, and there was no way to put one down.
+    const app = new AppState();
+    app.startSearch(1, "first");
+    app.startSearch(2, "second");
+    app.apply({ type: "searchHits", data: { id: 2, hits: [hit("peer", "x.flac")] } });
+    expect(app.activeSearch).toBe(2);
+
+    app.closeSearch(2);
+
+    expect(app.searches.map((s) => s.id)).toEqual([1]);
+    expect(app.activeSearch, "the newest of what is left").toBe(1);
+  });
+
+  it("leaves nothing selected once they are all gone", () => {
+    const app = new AppState();
+    app.startSearch(1, "only");
+    app.closeSearch(1);
+    expect(app.searches).toHaveLength(0);
+    expect(app.activeSearch).toBeNull();
+  });
+});
+
+describe("standing wishes", () => {
+  it("stops collecting hits without limit", () => {
+    // A wish is re-run for as long as it is kept, so an untended one grew
+    // forever at whatever interval the server allows.
+    const app = new AppState();
+    for (let batch = 0; batch < 60; batch++) {
+      const files = Array.from({ length: 20 }, (_, index) => ({
+        path: `b${batch}-f${index}.flac`,
+        size: 1,
+        bitrate: null,
+        duration: null,
+        vbr: false,
+      }));
+      app.apply({
+        type: "wishlistHits",
+        data: { query: "aphex", hits: [{ username: "peer", freeSlots: 1, speed: 1, files }] },
+      });
+    }
+    const kept = app.wishHits["aphex"] ?? [];
+    expect(kept.length).toBeLessThanOrEqual(500);
+    expect(kept[0]?.path, "newest first").toBe("b59-f0.flac");
+  });
+});
+
 describe("everyone seen", () => {
   it("gathers people from every place one can appear", () => {
     const app = new AppState();

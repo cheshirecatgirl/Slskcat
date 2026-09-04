@@ -1,6 +1,6 @@
 <script lang="ts">
   import { core } from "../lib/core";
-  import { app } from "../lib/state.svelte";
+  import { app, fire} from "../lib/state.svelte";
   import type { Section } from "../lib/nav";
 
   let {
@@ -66,7 +66,7 @@
         label: `Browse ${text}`,
         hint: "Open this user's shares",
         run: () => {
-          void core.browseUser(text);
+          fire(core.browseUser(text));
           section = "browse";
           onclose();
         },

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { core } from "../lib/core";
-  import { app } from "../lib/state.svelte";
+  import { app, fire} from "../lib/state.svelte";
 
   /** Which conversation the right-hand pane is showing. */
   type Open = { kind: "room"; name: string } | { kind: "direct"; name: string } | null;
@@ -22,7 +22,7 @@
   let log = $state<HTMLDivElement | null>(null);
 
   onMount(() => {
-    void core.requestRoomList();
+    fire(core.requestRoomList());
   });
 
   const listed = $derived.by(() => {
@@ -164,7 +164,7 @@
   }
 
   function leave(name: string) {
-    void core.leaveRoom(name);
+    fire(core.leaveRoom(name));
     void remember((app.settings?.rooms ?? []).filter((room) => room !== name));
     if (open?.kind === "room" && open.name === name) open = null;
   }
@@ -187,9 +187,9 @@
     if (open.kind === "room") {
       if (!app.joined.includes(open.name)) await join(open.name);
       // The server echoes our own room lines back, so nothing is added here.
-      void core.sendRoomMessage(open.name, body);
+      fire(core.sendRoomMessage(open.name, body));
     } else {
-      void core.sendPrivateMessage(open.name, body);
+      fire(core.sendPrivateMessage(open.name, body));
       // Private messages are not echoed, so the sent line is recorded locally.
       app.addMessage(open.name, { author: app.username, body });
     }

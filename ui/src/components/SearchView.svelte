@@ -1,6 +1,6 @@
 <script lang="ts">
   import { core } from "../lib/core";
-  import { app, AppState, isLiveTransfer, type ResultRow } from "../lib/state.svelte";
+  import { app, AppState, fire, isLiveTransfer, type ResultRow } from "../lib/state.svelte";
   import {
     bitrate,
     bytes,
@@ -230,6 +230,19 @@
     }
   }
 
+  /**
+   * Put a search down for good.
+   *
+   * Stopping one leaves its results on screen, which is right for a search
+   * still being read; this is for the ones that are finished with. A running
+   * search is cancelled first so the core is not left collecting for a tab
+   * nobody can see.
+   */
+  function close(id: number, running: boolean) {
+    if (running) fire(core.cancelSearch(id));
+    app.closeSearch(id);
+  }
+
   /** Stop a running search. Hits already delivered stay on screen. */
   async function stop(id: number) {
     try {
@@ -310,15 +323,19 @@
     {#if app.searches.length > 0}
       <div class="tabs">
         {#each app.searches.slice(0, 8) as item (item.id)}
-          <button
-            class="tab"
-            class:active={app.activeSearch === item.id}
-            onclick={() => (app.activeSearch = item.id)}
-          >
-            {#if item.running}<span class="pulse" aria-hidden="true"></span>{/if}
-            <span class="label">{item.query}</span>
-            <span class="count num">{item.rows.length}</span>
-          </button>
+          <div class="tab" class:active={app.activeSearch === item.id}>
+            <button class="pick" onclick={() => (app.activeSearch = item.id)}>
+              {#if item.running}<span class="pulse" aria-hidden="true"></span>{/if}
+              <span class="label">{item.query}</span>
+              <span class="count num">{item.rows.length}</span>
+            </button>
+            <button
+              class="shut"
+              title="Close this search"
+              aria-label="Close search for {item.query}"
+              onclick={() => close(item.id, item.running)}>×</button
+            >
+          </div>
         {/each}
       </div>
     {/if}
@@ -652,6 +669,33 @@
   .tabs::-webkit-scrollbar {
     display: none;
   }
+  .tab .pick {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  /* Appears on hover, so a row of tabs is not a row of crosses. */
+  .shut {
+    flex: none;
+    width: 16px;
+    margin-right: -4px;
+    border-radius: 5px;
+    color: var(--text-3);
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity var(--fast), color var(--fast), background var(--fast);
+  }
+  .tab:hover .shut,
+  .shut:focus-visible {
+    opacity: 1;
+  }
+  .shut:hover {
+    background: var(--danger-quiet);
+    color: var(--danger);
+  }
+
   .tab {
     display: flex;
     align-items: center;

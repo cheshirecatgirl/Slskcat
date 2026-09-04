@@ -108,6 +108,9 @@ export interface Notice {
  */
 const key = (username: string, path: string) => `${username}\0${path}`;
 
+/** Hits kept per standing wish. Past this, the oldest are dropped. */
+const WISH_HIT_LIMIT = 500;
+
 /**
  * Whether a transfer can still change on its own.
  *
@@ -303,6 +306,21 @@ export class AppState {
     this.conversations = { ...this.conversations, [peer]: [...thread, message] };
   }
 
+  /**
+   * Forget a search and everything it found.
+   *
+   * Searches were only ever added. Eight tabs are shown but every search ever
+   * run stayed in memory with all of its rows, so an evening's use held tens
+   * of thousands of results nobody was looking at any more — and there was no
+   * way to put one down.
+   */
+  closeSearch(id: SearchId) {
+    this.searches = this.searches.filter((search) => search.id !== id);
+    if (this.activeSearch === id) {
+      this.activeSearch = this.searches[0]?.id ?? null;
+    }
+  }
+
   startSearch(id: SearchId, query: string) {
     const search = new Search(id, query);
     this.searches = [search, ...this.searches];
@@ -370,7 +388,11 @@ export class AppState {
         );
         // Newest first: a wish is checked periodically, so the interesting
         // hits are the ones that just turned up.
-        this.wishHits = { ...this.wishHits, [query]: [...rows, ...(this.wishHits[query] ?? [])] };
+        // Newest first, and capped: a wish is re-run for as long as it is
+        // kept, so an untended one would grow without limit at whatever
+        // interval the server allows.
+        const kept = [...rows, ...(this.wishHits[query] ?? [])].slice(0, WISH_HIT_LIMIT);
+        this.wishHits = { ...this.wishHits, [query]: kept };
         break;
       }
 
@@ -461,3 +483,14 @@ export class AppState {
 }
 
 export const app = new AppState();
+
+/**
+ * Send a command and say so if it fails.
+ *
+ * `void promise` drops the rejection: the command silently did not happen, and
+ * nothing on screen changed to admit it. Anything fired without waiting for an
+ * answer should go through here.
+ */
+export function fire(action: Promise<unknown>) {
+  void action.catch((error: unknown) => app.notify(String(error), "danger"));
+}

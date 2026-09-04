@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { core, onEvent } from "./lib/core";
-  import { app, AppState } from "./lib/state.svelte";
+  import { app, AppState, fire} from "./lib/state.svelte";
   import type { Section } from "./lib/nav";
   import Sidebar from "./components/Sidebar.svelte";
   import Notices from "./components/Notices.svelte";
@@ -57,7 +57,7 @@
       // between sessions: without this the remembered list would sit there
       // named but silent.
       if (event.type === "connected") {
-        for (const room of app.settings?.rooms ?? []) void core.joinRoom(room);
+        for (const room of app.settings?.rooms ?? []) fire(core.joinRoom(room));
       }
       // A finished transfer is the one thing that changes what is on disk
       // while the app is running, so it is the only thing that re-reads it.

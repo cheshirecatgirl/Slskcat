@@ -14,7 +14,7 @@ close most of that gap** — that is the job.
 
 ## What is already verified — do not redo
 
-- 88 Rust tests and 21 frontend tests, `cargo clippy` under
+- 88 Rust tests and 24 frontend tests, `cargo clippy` under
   pedantic-denied, `cargo fmt`, frontend
   typecheck. All green.
 - The credential-store round trip, against a real `gnome-keyring`.
