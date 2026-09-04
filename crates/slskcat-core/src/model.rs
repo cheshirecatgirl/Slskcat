@@ -335,7 +335,7 @@ impl Default for Config {
             download_dir: default_download_dir(),
             shared_dirs: Vec::new(),
             upload_slots: 2,
-            download_slots: 3,
+            download_slots: 4,
             search_timeout: Duration::from_secs(12),
         }
     }

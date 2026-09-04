@@ -252,6 +252,9 @@ const run = async () => {
     await page.click('button:has-text("Messages")');
     await page.waitForTimeout(300);
     await page.click('button:has-text("nicotine")');
+    await page.waitForTimeout(200);
+    // Opening a room no longer joins it, so the shot joins it deliberately.
+    await page.click('header button:has-text("Join")');
     await page.evaluate(() => {
       window.__emit({ type: "roomJoined", data: { room: "nicotine", users: ["a", "b", "c"] } });
       const say = (author, body) =>

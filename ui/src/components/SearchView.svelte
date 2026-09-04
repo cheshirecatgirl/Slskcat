@@ -3,8 +3,6 @@
   import { app, type ResultRow } from "../lib/state.svelte";
   import { bitrate, bytes, duration, extension, fileName, parentPath, rate, tailPath } from "../lib/format";
 
-  let { onCommand }: { onCommand: () => void } = $props();
-
   let query = $state("");
   let filter = $state("");
   let readyOnly = $state(false);
@@ -247,9 +245,6 @@
         autocapitalize="off"
       />
       <button class="btn primary" type="submit" disabled={!query.trim()}>Search</button>
-      <button class="btn quiet" type="button" onclick={onCommand} title="Command bar">
-        <span class="kbd">⌘K</span>
-      </button>
     </form>
 
     {#if app.searches.length > 0}

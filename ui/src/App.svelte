@@ -23,7 +23,23 @@
     // resetting what the user configured.
     core
       .loadSettings()
-      .then((loaded) => (app.settings = loaded))
+      .then(async (loaded) => {
+        app.settings = loaded;
+        // A remembered password is a standing instruction to sign in. Making
+        // someone confirm it every launch asks them to re-approve a decision
+        // they already made, and the form they would be confirming is one
+        // they cannot usefully change — it is already filled in.
+        if (!loaded.rememberPassword || !loaded.username || !loaded.password) return;
+        app.connecting = true;
+        try {
+          app.settings = await core.connect(loaded);
+        } catch (error) {
+          // Falls through to the form with the reason on it, which is the
+          // same place a failed manual sign-in lands.
+          app.connecting = false;
+          app.loginError = String(error);
+        }
+      })
       .catch((error) => {
         app.settingsError = String(error);
         app.notify(`Could not load settings: ${error}`, "danger");
@@ -61,7 +77,7 @@
     {#if !app.connected}
       <ConnectView />
     {:else if section === "search"}
-      <SearchView onCommand={() => (palette = true)} />
+      <SearchView />
     {:else if section === "wishlist"}
       <WishlistView />
     {:else if section === "transfers"}

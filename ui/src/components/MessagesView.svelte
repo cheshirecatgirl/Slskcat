@@ -54,7 +54,15 @@
 
   function openRoom(name: string) {
     open = { kind: "room", name };
-    if (!app.joined.includes(name)) void core.joinRoom(name);
+  }
+
+  /** Join explicitly, which is also what sending a first line does. */
+  async function join(name: string) {
+    try {
+      await core.joinRoom(name);
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
   }
 
   function openDirect(name: string) {
@@ -79,12 +87,18 @@
     newPeer = "";
   }
 
-  function send(event: SubmitEvent) {
+  async function send(event: SubmitEvent) {
     event.preventDefault();
     const body = draft.trim();
     if (!body || !open) return;
 
     if (open.kind === "room") {
+      // Joining is what saying something requires, so it happens here rather
+      // than on the click that opened the room. Browsing the room list used
+      // to join every room touched on the way past, which announces you in
+      // each one and leaves the joined list full of places never spoken in.
+      // Commands reach the core in order, so the join precedes the line.
+      if (!app.joined.includes(open.name)) await join(open.name);
       // The server echoes our own room lines back, so nothing is added here.
       void core.sendRoomMessage(open.name, body);
     } else {
@@ -175,7 +189,14 @@
       <header>
         <h2>{open.name}</h2>
         {#if open.kind === "room"}
-          <span class="num dim">{members.length.toLocaleString()} here</span>
+          {#if app.joined.includes(open.name)}
+            <span class="num dim">{members.length.toLocaleString()} here</span>
+          {:else}
+            <!-- Nothing arrives from a room until it is joined, so an
+                 unjoined one needs a way in that is not "say something". -->
+            <span class="num dim">not joined</span>
+            <button class="btn quiet small" onclick={() => open && join(open.name)}>Join</button>
+          {/if}
         {:else}
           <span class="tag">direct</span>
         {/if}
@@ -239,7 +260,9 @@
 
   .view {
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr);
+    /* The same width as the nav beside it: two stacked lists of names at
+       two different widths read as a mistake. */
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
     height: 100%;
   }
 

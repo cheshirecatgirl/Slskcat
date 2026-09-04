@@ -145,7 +145,7 @@ export function defaultSettings(): Settings {
     downloadDir: "",
     sharedDirs: [],
     uploadSlots: 2,
-    downloadSlots: 3,
+    downloadSlots: 4,
     searchTimeoutSecs: 12,
     wishlist: [],
     accounts: [],

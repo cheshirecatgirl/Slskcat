@@ -68,7 +68,10 @@
     {
       id: "transfers",
       label: "Transfers",
-      path: "M12 3v12.2l4.6-4.6 1.4 1.4-7 7-7-7 1.4-1.4 4.6 4.6V3h2ZM4 19h16v2H4v-2Z",
+      // The shaft used to span x 12-14 while the baseline spanned 4-20, so
+      // the arrow hung a unit off the centre of its own line. Every part of
+      // this one is symmetric about x=12.
+      path: "M12 17 6 11l1.4-1.4L11 13.2V3h2v10.2l3.6-3.6L18 11ZM4 19h16v2H4v-2Z",
     },
     {
       id: "browse",
@@ -78,7 +81,9 @@
     {
       id: "messages",
       label: "Messages",
-      path: "M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2Zm0 2v10.9L8.3 15H20V6H4Z",
+      // A speech bubble said "chat"; the section is rooms and people. Drawn
+      // hollow with a 2-unit wall, which is what the rest of the set does.
+      path: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 7.5c-3.9 0-7 2.2-7 5V20h14v-2.5c0-2.8-3.1-5-7-5Zm0 2c2.9 0 5 1.5 5 3V18H7v-.5c0-1.5 2.1-3 5-3Z",
     },
     {
       id: "settings",
