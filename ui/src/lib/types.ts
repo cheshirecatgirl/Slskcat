@@ -123,6 +123,8 @@ export interface Settings {
   uploadSlots: number;
   /** Downloads allowed to run at once. */
   downloadSlots: number;
+  /** Route the session through a proxy, or null to connect directly. */
+  proxy: Proxy | null;
   searchTimeoutSecs: number;
   wishlist: string[];
   /** Known accounts on this machine, most recently used first. */
@@ -146,6 +148,7 @@ export function defaultSettings(): Settings {
     sharedDirs: [],
     uploadSlots: 2,
     downloadSlots: 4,
+    proxy: null,
     searchTimeoutSecs: 12,
     wishlist: [],
     accounts: [],
@@ -175,11 +178,28 @@ export function hydrateSettings(raw: Partial<Settings> | null | undefined): Sett
     sharedDirs: from.sharedDirs ?? base.sharedDirs,
     uploadSlots: from.uploadSlots ?? base.uploadSlots,
     downloadSlots: from.downloadSlots ?? base.downloadSlots,
+    proxy: from.proxy ?? base.proxy,
     searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
     wishlist: from.wishlist ?? base.wishlist,
     accounts: from.accounts ?? base.accounts,
     keychainAvailable: from.keychainAvailable ?? base.keychainAvailable,
   };
+}
+
+/** Which protocol a proxy speaks. */
+export type ProxyKind = "http" | "socks4" | "socks5";
+
+export interface Proxy {
+  kind: ProxyKind;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+/** An empty proxy, which the core reads as "connect directly". */
+export function blankProxy(): Proxy {
+  return { kind: "socks5", host: "", port: 1080, username: "", password: "" };
 }
 
 export type Disconnect =

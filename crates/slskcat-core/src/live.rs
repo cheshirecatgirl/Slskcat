@@ -21,6 +21,8 @@ use soulseek_rs::{
     UploadInfo, UploadStatus, UserStatus,
 };
 
+use crate::proxy::Relay;
+
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -95,6 +97,9 @@ pub struct LiveBackend {
     wishes: HashMap<String, Wish>,
     /// Last interval announced to the interface, so it is sent only on change.
     wishlist_interval: Option<Duration>,
+    /// The loopback stand-in the session is running behind, if a proxy is in
+    /// use. Dropped on disconnect, which stops it.
+    relay: Option<Relay>,
     /// Downloads accepted but not yet handed to the library, oldest first.
     ///
     /// Held here rather than started immediately so `download_slots` means
@@ -137,7 +142,7 @@ impl LiveBackend {
             out.warn(format!("Not sharing {}: {reason}", path.display()));
         }
 
-        let settings = ClientSettings {
+        let mut settings = ClientSettings {
             username: config.credentials.username.clone(),
             password: config.credentials.password.clone(),
             shared_directories: config
@@ -147,6 +152,33 @@ impl LiveBackend {
                 .collect(),
             ..ClientSettings::default()
         };
+
+        // With a proxy configured, the library is pointed at a loopback
+        // address instead of the real server. Everything it then opens —
+        // the server connection and every peer connection, whose addresses
+        // are rewritten in flight — arrives at the relay and leaves through
+        // the proxy.
+        if let Some(proxy) = config.proxy.clone() {
+            let real = settings.server_address.clone();
+            match Relay::start(proxy, real.get_host().to_owned(), real.get_port()) {
+                Ok(relay) => {
+                    let local = relay.server_addr();
+                    settings.server_address =
+                        soulseek_rs::PeerAddress::new(local.ip().to_string(), local.port());
+                    // Nothing can reach a listening port from behind a proxy,
+                    // so advertising one would only invite connections that
+                    // never arrive and uploads that never start.
+                    settings.enable_listen = false;
+                    self.relay = Some(relay);
+                }
+                Err(error) => {
+                    out.emit(Event::LoginFailed {
+                        reason: format!("Could not start the proxy relay: {error}"),
+                    });
+                    return;
+                }
+            }
+        }
 
         // `connect` needs exclusive access; once it succeeds the client is
         // shared for the rest of the session and every other call takes `&self`.
@@ -206,6 +238,9 @@ impl LiveBackend {
         // them; carrying them into the next one would resume downloads the
         // user never asked this session for.
         self.waiting.clear();
+        // Stops the relay's listeners. A session that reconnects without a
+        // proxy must not still have one standing.
+        self.relay = None;
         self.pending_browses.clear();
         self.watched_users.clear();
         self.shares = None;

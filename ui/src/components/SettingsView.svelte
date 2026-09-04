@@ -2,6 +2,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
+  import { blankProxy, type Proxy } from "../lib/types";
   import type { Settings } from "../lib/types";
 
   const settings = $derived(app.settings);
@@ -91,6 +92,22 @@
   function onDownloadSlots(event: Event) {
     const value = Number((event.currentTarget as HTMLInputElement).value);
     void update({ downloadSlots: value });
+  }
+
+  /** The proxy being edited, or a blank one while the section is switched on. */
+  const proxy = $derived(settings?.proxy ?? null);
+
+  /**
+   * Changes are written when a field is left rather than on every keystroke,
+   * so a half-typed host is never saved and never connected through.
+   */
+  function editProxy(change: Partial<Proxy>) {
+    if (!settings) return;
+    void update({ proxy: { ...(settings.proxy ?? blankProxy()), ...change } });
+  }
+
+  function toggleProxy(on: boolean) {
+    void update({ proxy: on ? blankProxy() : null });
   }
 </script>
 
@@ -190,6 +207,82 @@
       </section>
 
       <section>
+        <h3>Proxy</h3>
+        <p class="hint">
+          Sends the server connection and every outbound peer connection through
+          a proxy. Nothing can reach you through one, so listening is switched
+          off while it is on: you can search, browse, chat and download from
+          peers that accept connections, but peers behind their own firewall
+          become unreachable and nothing can be uploaded to them.
+        </p>
+
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={proxy !== null}
+            onchange={(event) => toggleProxy(event.currentTarget.checked)}
+          />
+          <span>Connect through a proxy</span>
+        </label>
+
+        {#if proxy}
+          <div class="proxy">
+            <select
+              class="field slim auto"
+              value={proxy.kind}
+              onchange={(event) =>
+                editProxy({ kind: event.currentTarget.value as Proxy["kind"] })}
+            >
+              <option value="socks5">SOCKS5</option>
+              <option value="socks4">SOCKS4a</option>
+              <option value="http">HTTP</option>
+            </select>
+            <input
+              class="field slim"
+              value={proxy.host}
+              placeholder="Host"
+              spellcheck="false"
+              autocapitalize="off"
+              onchange={(event) => editProxy({ host: event.currentTarget.value.trim() })}
+            />
+            <input
+              class="field slim port num"
+              value={proxy.port}
+              type="number"
+              min="1"
+              max="65535"
+              placeholder="Port"
+              onchange={(event) => editProxy({ port: Number(event.currentTarget.value) })}
+            />
+          </div>
+          <div class="proxy">
+            <input
+              class="field slim"
+              value={proxy.username}
+              placeholder="Username (optional)"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              onchange={(event) => editProxy({ username: event.currentTarget.value })}
+            />
+            <input
+              class="field slim"
+              type="password"
+              value={proxy.password}
+              placeholder="Password (optional)"
+              autocomplete="off"
+              onchange={(event) => editProxy({ password: event.currentTarget.value })}
+            />
+          </div>
+          <p class="hint quiet">
+            The destination is handed to the proxy as a name, never resolved
+            here, so no lookup announces where you are going. Takes effect on
+            the next sign-in.
+          </p>
+        {/if}
+      </section>
+
+      <section>
         <h3>Account</h3>
         <p class="hint">
           Signed in as <strong>{app.username}</strong>.
@@ -211,6 +304,37 @@
 </div>
 
 <style>
+  .proxy {
+    display: flex;
+    gap: 8px;
+    margin-top: 9px;
+  }
+  /* `.field` is `width: 100%` on a `--surface-2` background, and the panel
+     these sit on is `--surface-2` too. Left alone that gives a select wide
+     enough to crush the row beside it, and inputs the same colour as the card
+     holding them. Both have to be undone here. */
+  .proxy .field {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    background: var(--surface);
+    border-color: var(--line-soft);
+  }
+  .proxy .field:focus {
+    border-color: var(--accent);
+  }
+  .proxy .field.auto {
+    flex: none;
+  }
+  .proxy .port {
+    flex: none;
+    width: 92px;
+  }
+  .hint.quiet {
+    margin-top: 9px;
+    color: var(--text-3);
+  }
+
   .view {
     display: flex;
     flex-direction: column;

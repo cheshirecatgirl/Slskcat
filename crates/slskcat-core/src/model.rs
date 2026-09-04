@@ -323,6 +323,8 @@ pub struct Config {
     /// How long a search keeps collecting replies before it is closed.
     #[serde(with = "seconds")]
     pub search_timeout: Duration,
+    /// Route the session through a proxy, or `None` to connect directly.
+    pub proxy: Option<crate::proxy::Proxy>,
 }
 
 impl Default for Config {
@@ -337,6 +339,7 @@ impl Default for Config {
             upload_slots: 2,
             download_slots: 4,
             search_timeout: Duration::from_secs(12),
+            proxy: None,
         }
     }
 }
@@ -359,6 +362,12 @@ impl Config {
         }
         if self.download_slots == 0 {
             self.download_slots = 1;
+        }
+        // A proxy with nothing in it is off, not broken. Carrying a half-filled
+        // one forward would fail every connection for a setting the user was
+        // part-way through typing.
+        if self.proxy.as_ref().is_some_and(|proxy| !proxy.is_usable()) {
+            self.proxy = None;
         }
         if self.search_timeout.is_zero() {
             self.search_timeout = Duration::from_secs(12);

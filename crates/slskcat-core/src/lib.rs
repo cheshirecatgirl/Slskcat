@@ -26,6 +26,7 @@ pub mod event;
 pub mod guard;
 pub mod live;
 pub mod model;
+pub mod proxy;
 pub mod recovery;
 
 pub use backend::{Backend, EventSink};

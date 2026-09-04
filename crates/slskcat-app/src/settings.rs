@@ -14,6 +14,7 @@
 //! an acceptable response to it.
 
 use slskcat_core::model::{Config, Credentials};
+use slskcat_core::proxy::Proxy;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -49,6 +50,13 @@ pub struct Settings {
     pub upload_slots: usize,
     /// Downloads allowed to run at once.
     pub download_slots: usize,
+    /// Route the session through a proxy. `None` connects directly.
+    ///
+    /// The password travels with it rather than going to the credential store:
+    /// a proxy password is a property of a network route, not of the person,
+    /// and keying it in the store beside the account password would make one
+    /// look like the other.
+    pub proxy: Option<Proxy>,
     pub search_timeout_secs: u64,
     /// Every account this machine knows about, most recently used first.
     ///
@@ -79,6 +87,7 @@ impl Default for Settings {
             shared_dirs: Vec::new(),
             upload_slots: config.upload_slots,
             download_slots: config.download_slots,
+            proxy: None,
             search_timeout_secs: config.search_timeout.as_secs(),
             accounts: Vec::new(),
             wishlist: Vec::new(),
@@ -130,6 +139,7 @@ impl Settings {
             shared_dirs: self.shared_dirs.clone(),
             upload_slots: self.upload_slots,
             download_slots: self.download_slots,
+            proxy: self.proxy.clone(),
             search_timeout: Duration::from_secs(self.search_timeout_secs),
         }
         // The core repairs anything blank; doing it here too means the
@@ -497,6 +507,39 @@ mod tests {
             settings.accounts.is_empty(),
             "a blank name must never reach the switcher"
         );
+    }
+
+    #[test]
+    fn a_half_typed_proxy_is_treated_as_no_proxy() {
+        // Someone part-way through the form must not have every connection
+        // fail because the host box is still empty.
+        let settings = Settings {
+            proxy: Some(Proxy {
+                kind: slskcat_core::proxy::ProxyKind::Socks5,
+                host: String::new(),
+                port: 1080,
+                username: String::new(),
+                password: String::new(),
+            }),
+            ..Settings::default()
+        };
+        assert!(settings.to_config().proxy.is_none());
+    }
+
+    #[test]
+    fn a_complete_proxy_reaches_the_session() {
+        let proxy = Proxy {
+            kind: slskcat_core::proxy::ProxyKind::Http,
+            host: "127.0.0.1".into(),
+            port: 8080,
+            username: "user".into(),
+            password: "pass".into(),
+        };
+        let settings = Settings {
+            proxy: Some(proxy.clone()),
+            ..Settings::default()
+        };
+        assert_eq!(settings.to_config().proxy, Some(proxy));
     }
 
     #[test]

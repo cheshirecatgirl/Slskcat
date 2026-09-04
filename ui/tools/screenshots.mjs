@@ -76,6 +76,7 @@ const bridge = () => {
     uploadSlots: 3,
     searchTimeoutSecs: 12,
     wishlist: ["boards of canada — geogaddi vinyl rip", "coil musick to play in the dark 2"],
+    proxy: null,
     accounts: ["slsk_listener", "night_shift", "tape_hiss"],
     keychainAvailable: true,
   };
@@ -295,6 +296,15 @@ const run = async () => {
     await page.click('button:has-text("Settings")');
     await page.waitForTimeout(400);
     await shot("6-settings");
+
+    // 6c. The proxy section, filled in
+    await page.click('span:has-text("Connect through a proxy")');
+    await page.waitForTimeout(300);
+    await page.fill('.proxy input[placeholder="Host"]', "127.0.0.1");
+    await page.waitForTimeout(300);
+    await page.evaluate(() => document.querySelector("section:has(.proxy)")?.scrollIntoView());
+    await page.waitForTimeout(300);
+    await shot("6c-proxy");
 
     // 6b. The share guard: one path refused outright, one flagged for
     // confirmation. The picker is driven through the mocked dialog command.
