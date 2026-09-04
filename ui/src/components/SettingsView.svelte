@@ -33,10 +33,17 @@
       // doing it here is better than leaving it for the user to discover.
       if (change.proxy !== undefined && app.connected) {
         app.connecting = true;
+        // The wait, not the form: there is nothing to fill in, and the old
+        // session drops partway through. `reconnecting` is what makes the
+        // wait say so.
+        app.reconnecting = true;
+        app.resuming = true;
         app.settings = await core.connect(next);
       }
     } catch (error) {
       app.connecting = false;
+      app.reconnecting = false;
+      app.resuming = false;
       app.notify(String(error), "danger");
     }
   }

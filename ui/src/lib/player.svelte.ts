@@ -10,12 +10,16 @@
  * light: no decoding of whole files into memory, no dependency, and a four
  * hundred megabyte FLAC costs the same as a three minute one.
  *
- * Speed and pitch are the same control on an audio element — playing faster
- * raises the pitch, as tape does. `preservesPitch` separates them: with it on,
- * speed is tempo alone; with it off, the two move together the way a record at
- * the wrong speed does. Both are worth having, so it is a switch rather than a
- * decision made here.
+ * Speed and pitch are independent, and both move while the track plays.
+ *
+ * They come from opposite ends. Tempo is the element's own: `playbackRate`
+ * with `preservesPitch` on is a time-stretcher the browser already ships, and
+ * it is better than anything worth writing here. Pitch it will not give you at
+ * all, so that half is a worklet — a granular shifter sitting between the
+ * source and the effects.
  */
+
+import shifterUrl from "./pitch-worklet.js?url";
 
 import { fileName } from "./format";
 
@@ -46,17 +50,24 @@ export class Player {
   duration = $state(0);
   volume = $state(0.9);
 
-  /** 0.5 to 2. */
+  /** Tempo, 0.5 to 2. Does not touch the pitch. */
   speed = $state(1);
-  /** Whether speed leaves the pitch alone. */
-  keepPitch = $state(true);
+  /** Semitones, -12 to 12. Does not touch the tempo. */
+  pitch = $state(0);
   /** 0 to 1, how much of the signal is reverberated. */
   reverb = $state(0);
+  /**
+   * False where the platform has no audio worklet, which leaves tempo and
+   * reverb working and pitch not. Better to say so than to offer a slider
+   * that does nothing.
+   */
+  pitchAvailable = $state(true);
 
   #audio: HTMLAudioElement | null = null;
   #context: AudioContext | null = null;
   #dry: GainNode | null = null;
   #wet: GainNode | null = null;
+  #shifter: AudioWorkletNode | null = null;
 
   /** Attach to the element once it exists. */
   attach(audio: HTMLAudioElement) {
@@ -70,21 +81,33 @@ export class Player {
    * Deferred because a browser will not start an `AudioContext` before a
    * gesture, and building one at load leaves it suspended and silent.
    */
-  #graph() {
+  async #graph() {
     if (this.#context || !this.#audio) return;
     const context = new AudioContext();
     const source = context.createMediaElementSource(this.#audio);
+
+    // The shifter is optional: if the platform has no worklet, everything
+    // downstream of it still works and only pitch is lost.
+    let head: AudioNode = source;
+    try {
+      await context.audioWorklet.addModule(shifterUrl);
+      const shifter = new AudioWorkletNode(context, "pitch-shifter", {
+        outputChannelCount: [2],
+      });
+      source.connect(shifter);
+      head = shifter;
+      this.#shifter = shifter;
+    } catch {
+      this.pitchAvailable = false;
+    }
 
     const dry = context.createGain();
     const wet = context.createGain();
     const convolver = context.createConvolver();
     convolver.buffer = impulse(context, REVERB_SECONDS);
 
-    source.connect(dry).connect(context.destination);
-    source.connect(wet).connect(convolver).connect(context.destination);
-
-    dry.gain.value = 1 - this.reverb;
-    wet.gain.value = this.reverb;
+    head.connect(dry).connect(context.destination);
+    head.connect(wet).connect(convolver).connect(context.destination);
 
     this.#context = context;
     this.#dry = dry;
@@ -98,7 +121,7 @@ export class Player {
       this.position = 0;
       this.#audio.src = track.src;
     }
-    this.#graph();
+    await this.#graph();
     await this.#context?.resume();
     this.apply();
     try {
@@ -140,7 +163,19 @@ export class Player {
     if (audio) {
       audio.volume = this.volume;
       audio.playbackRate = this.speed;
-      audio.preservesPitch = this.keepPitch;
+      // Always on: pitch is its own control now, so the element's job is
+      // tempo and nothing else.
+      audio.preservesPitch = true;
+    }
+    if (this.#shifter) {
+      // Twelve semitones to the octave, and an octave is a doubling.
+      const ratio = 2 ** (this.pitch / 12);
+      // Ramped rather than set: dragging the slider would otherwise step the
+      // read rate between blocks, which is audible as a click.
+      const target = this.#shifter.parameters.get("ratio");
+      const now = this.#context?.currentTime ?? 0;
+      target?.cancelScheduledValues(now);
+      target?.linearRampToValueAtTime(ratio, now + 0.05);
     }
     if (this.#dry && this.#wet) {
       // Equal-power rather than linear, so the middle of the control is not a

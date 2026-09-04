@@ -179,7 +179,8 @@ so far. Everything else compiles but has never been packaged.
 
 ## Already verified — don't redo these
 
-- 54 unit tests, clippy under pedantic-denied, fmt, frontend typecheck
+- 89 Rust tests and 25 frontend tests, clippy under pedantic-denied, fmt,
+  frontend typecheck
 - The credential store round trip, against a real `gnome-keyring`
 - The share guard, including a symlinked root pointing into a refused location
 - `cargo tauri build --bundles deb` — a 2.0 MB package that installs

@@ -8,3 +8,7 @@ ui/dist/
 
 # Tauri codegen
 crates/slskcat-app/gen/
+
+# Screenshots are regenerated from `ui/tools/screenshots.mjs` on demand. Only
+# the handful the README shows are kept, and those are already tracked.
+docs/*.png

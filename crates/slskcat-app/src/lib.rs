@@ -119,6 +119,12 @@ fn save_settings(handle: AppHandle, settings: Settings) -> Result<Settings, Stri
     Ok(saved)
 }
 
+/// Record an account in the switcher, once it has actually signed in.
+#[tauri::command]
+fn remember_account(handle: AppHandle, username: String) -> Result<Settings, String> {
+    settings::remember(&handle, &username)
+}
+
 /// Make another known account the current one, and return the settings it
 /// describes. Signing in is a separate step, so the form is filled rather than
 /// a session started behind the user's back.
@@ -341,6 +347,7 @@ pub fn run() {
             disconnect,
             load_settings,
             save_settings,
+            remember_account,
             switch_account,
             forget_account,
             search,

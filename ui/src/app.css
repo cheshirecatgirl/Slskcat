@@ -72,6 +72,10 @@
 
   --bg: #0b0b10;
   --surface: #131319;
+  /* The ground under anything that floats: menus, popovers, the palette. It
+     has to be opaque and a step lighter than whatever it covers, or the thing
+     underneath reads straight through it. */
+  --surface-1: #191921;
   --surface-2: #1a1a22;
   --surface-3: #23232d;
   --line: #2a2a36;
@@ -80,6 +84,7 @@
   --text: #f0f1f6;
   --text-2: #a5a8ba;
   --text-3: #6c6f85;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236c6f85' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 
   /* The accent is set per section by [data-space]; these are the fallbacks. */
   --accent: #8b7bf0;
@@ -178,6 +183,7 @@
     color-scheme: light;
     --bg: #eceaf3;
     --surface: #fff;
+    --surface-1: #fff;
     --surface-2: #f4f4f8;
     --surface-3: #e9e9f0;
     --line: #e2e2ec;
@@ -185,6 +191,7 @@
     --text: #12121a;
     --text-2: #53566a;
     --text-3: #83869a;
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%2383869a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
     --accent-text: #fff;
     --ok: #12916f;
     --warn: #a86c07;
@@ -338,6 +345,20 @@ button {
   background: var(--surface);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-quiet);
+}
+
+/* A select drawn by the platform is a different control on every platform, and
+   WebKitGTK's is the outlier. Drawing the chevron here means every dropdown in
+   the app is the same shape — including the one that is a menu pretending to
+   be a select. */
+select.field {
+  appearance: none;
+  padding-right: 27px;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  cursor: pointer;
 }
 
 .tag {

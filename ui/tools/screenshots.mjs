@@ -60,6 +60,10 @@ const bridge = () => {
         return { allowed: true, sensitive: false, reason: null };
       }
       if (cmd === "plugin:dialog|open") return window.__pick ?? null;
+      if (cmd === "switch_account" || cmd === "remember_account") {
+        window.__settings = { ...window.__settings, username: args.username };
+        return { ...window.__settings };
+      }
       if (cmd === "save_settings" || cmd === "connect") {
         window.__settings = { ...window.__settings, ...args.settings, keychainAvailable: true };
         return { ...window.__settings };
@@ -115,14 +119,14 @@ const bridge = () => {
   };
 };
 
-const hit = (username, album, n, slots, speed) => ({
+const hit = (username, album, n, slots, speed, ext = "flac") => ({
   username,
   freeSlots: slots,
   speed,
   files: Array.from({ length: n }, (_, i) => ({
     path: `@@music\\${album}\\${String(i + 1).padStart(2, "0")} ${
       ["Rhubarb", "Xtal", "Ageispolis", "Heliosphan", "Green Calx", "Tha"][i % 6]
-    }.flac`,
+    }.${ext}`,
     size: 28_000_000 + i * 3_100_000,
     bitrate: [320, 256, 192, 1411][i % 4],
     duration: 180 + i * 37,
@@ -172,12 +176,27 @@ const run = async () => {
       },
       [
         hitData("velvet_hare", "Aphex Twin - Selected Ambient Works 85-92", 6, 2, 1_240_000),
-        hitData("nightporter", "Aphex Twin - Richard D James Album", 5, 0, 480_000),
+        // One rip in a different format, because that is what the network
+        // actually returns — and it is what gives the format filter something
+        // to filter.
+        hitData("nightporter", "Aphex Twin - Richard D James Album", 5, 0, 480_000, "mp3"),
         hitData("cassette_ghost", "Aphex Twin - Windowlicker EP", 4, 1, 2_100_000),
       ],
     );
     await page.waitForTimeout(400);
     await shot("2-search");
+
+    // 2b. The format filter, which stays open across several choices
+    await page.click('.picker > .field');
+    await page.waitForTimeout(200);
+    await page.click('.menu .row:has-text("FLAC")');
+    await page.click('.menu .row:has-text("MP3")');
+    await page.waitForTimeout(300);
+    await shot("2b-formats");
+    // Still open — that is the point of it — so clear it and close it.
+    await page.click('.menu .row:has-text("All formats")');
+    await page.click('.picker > .field');
+    await page.waitForTimeout(200);
 
     // 3. Command palette
     await page.keyboard.press("Control+k");
@@ -387,6 +406,47 @@ const run = async () => {
     await page.waitForTimeout(800);
     await shot("6b-share-guard");
 
+    // 1b. An account that no longer works. Adding one ends the session that
+    // was running, so a refusal lands on a form with nothing behind it — which
+    // is why the way back has to be on this screen.
+    await page.evaluate(() => {
+      window.__emit({ type: "connected", data: { username: "slsk_listener" } });
+    });
+    await page.waitForTimeout(200);
+    await page.click('.name[aria-haspopup="menu"]');
+    await page.waitForTimeout(200);
+    await page.click('button:has-text("Add another account")');
+    await page.waitForTimeout(300);
+    await page.fill('input[autocomplete="username"]', "owl_hours");
+    await page.fill('input[type="password"]', "hunter2");
+    await page.click('button[type="submit"]');
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      window.__emit({ type: "disconnected", data: { type: "requested" } });
+      window.__emit({
+        type: "loginFailed",
+        data: { reason: "The server refused the sign-in: unknown username or wrong password." },
+      });
+    });
+    await page.waitForTimeout(400);
+    await shot("1b-refused");
+
+    // 1c. A proxy cannot be applied to an open socket, so changing one rebuilds
+    // the session. The wait for that is the sign-in wait, not the form.
+    await page.evaluate(() => {
+      window.__emit({ type: "connected", data: { username: "slsk_listener" } });
+    });
+    await page.waitForTimeout(200);
+    await page.click('button:has-text("Settings")');
+    await page.waitForTimeout(300);
+    await page.click('span:has-text("Connect through a proxy")');
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      window.__emit({ type: "disconnected", data: { type: "requested" } });
+    });
+    await page.waitForTimeout(500);
+    await shot("1c-reconnecting");
+
     await context.close();
   }
 
@@ -394,8 +454,8 @@ const run = async () => {
 };
 
 // Injected into the page scope by name, so it must be declared as a global.
-function hitData(username, album, n, slots, speed) {
-  return hit(username, album, n, slots, speed);
+function hitData(username, album, n, slots, speed, ext) {
+  return hit(username, album, n, slots, speed, ext);
 }
 
 await run();

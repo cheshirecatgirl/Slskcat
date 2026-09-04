@@ -155,8 +155,25 @@ export class AppState {
    * a flash of the wrong thing at the moment they need to read it.
    */
   resuming = $state(false);
+  /**
+   * True while the sign-in in flight is replacing a session that was working.
+   *
+   * Only a proxy change does this: a route cannot be moved under an open
+   * socket, so the session is rebuilt. Nothing has gone wrong, and the wait
+   * says so by reading "Reconnecting" rather than "Connecting".
+   */
+  reconnecting = $state(false);
   /** True while the sign-in form is open to add an account, session intact. */
   addingAccount = $state(false);
+  /**
+   * The account this session left, if it left one.
+   *
+   * A sign-in that fails is otherwise a dead end: switching to an account that
+   * has since been deleted, or mistyped into the switcher, ends the session
+   * that was working and leaves a form with nowhere to go but forward. This is
+   * what the way back points at.
+   */
+  previousAccount = $state<string | null>(null);
   shares = $state<{ directories: number; files: number } | null>(null);
 
   // --- search ---
@@ -334,16 +351,21 @@ export class AppState {
         this.connected = true;
         this.connecting = false;
         this.resuming = false;
+        this.reconnecting = false;
         this.username = event.data.username;
         this.loginError = null;
         this.displaced = false;
         this.addingAccount = false;
+        // Somewhere to go back to is only worth keeping while the way forward
+        // is still in doubt.
+        this.previousAccount = null;
         break;
 
       case "loginFailed":
         this.connected = false;
         this.connecting = false;
         this.resuming = false;
+        this.reconnecting = false;
         // Whatever ended the last session, the current story is this refusal.
         // Leaving `displaced` set would keep a "go back online" button on
         // screen next to the reason it just failed to.
@@ -354,7 +376,10 @@ export class AppState {
       case "disconnected": {
         this.connected = false;
         this.connecting = false;
-        this.resuming = false;
+        // A reconnect drops the old session on its way to the new one. That
+        // disconnect is a step in the sign-in, not the end of it, so the wait
+        // stays on screen instead of flashing the form between the two.
+        if (!this.reconnecting) this.resuming = false;
         const why = event.data;
         this.displaced = why.type === "loggedInElsewhere";
         if (why.type === "lost") {

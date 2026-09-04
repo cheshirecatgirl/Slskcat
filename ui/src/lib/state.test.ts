@@ -187,14 +187,34 @@ describe("sessions ending", () => {
     const app = new AppState();
     app.connecting = true;
     app.resuming = true;
+    app.reconnecting = true;
     app.displaced = true;
     app.addingAccount = true;
+    app.previousAccount = "someone";
     app.apply({ type: "connected", data: { username: "listener" } });
-    expect([app.connecting, app.resuming, app.displaced, app.addingAccount]).toEqual([
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect([
+      app.connecting,
+      app.resuming,
+      app.reconnecting,
+      app.displaced,
+      app.addingAccount,
+    ]).toEqual([false, false, false, false, false]);
+    expect(app.previousAccount).toBeNull();
+  });
+
+  it("keeps the wait on screen through the disconnect a reconnect causes", () => {
+    // Applying a proxy rebuilds the session, so the old one drops partway
+    // through. Letting that clear the wait put the sign-in form on screen for
+    // the length of a handshake, which is the flicker this exists to stop.
+    const app = new AppState();
+    app.resuming = true;
+    app.reconnecting = true;
+    app.apply({ type: "disconnected", data: { type: "requested" } });
+    expect(app.resuming).toBe(true);
+
+    // A disconnect that no reconnect asked for still ends the wait.
+    app.reconnecting = false;
+    app.apply({ type: "disconnected", data: { type: "requested" } });
+    expect(app.resuming).toBe(false);
   });
 });

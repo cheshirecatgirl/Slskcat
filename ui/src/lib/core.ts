@@ -27,6 +27,9 @@ export const core = {
   loadSettings: () => invoke<Partial<Settings>>("load_settings").then(hydrateSettings),
   saveSettings: (settings: Settings) =>
     invoke<Partial<Settings>>("save_settings", { settings }).then(hydrateSettings),
+  /** Record an account in the switcher. Only ever after it has signed in. */
+  rememberAccount: (username: string) =>
+    invoke<Partial<Settings>>("remember_account", { username }).then(hydrateSettings),
   /** Make another known account current. Signing in stays a separate step. */
   switchAccount: (username: string) =>
     invoke<Partial<Settings>>("switch_account", { username }).then(hydrateSettings),

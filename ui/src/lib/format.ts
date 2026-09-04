@@ -91,15 +91,15 @@ export const FORMAT_GROUPS: { label: string; formats: readonly string[] }[] = [
     formats: ["mkv", "mp4", "m4v", "avi", "mov", "webm", "wmv", "flv", "mpg", "mpeg", "ts", "vob"],
   },
   {
-    label: "Images",
+    label: "Image",
     formats: ["jpg", "jpeg", "png", "gif", "webp"],
   },
   {
-    label: "Archives",
+    label: "Archive",
     formats: ["zip", "rar", "7z", "iso"],
   },
   {
-    label: "With the rip",
+    label: "Metadata",
     formats: ["cue", "log", "txt", "nfo", "sfv", "m3u", "m3u8", "pdf"],
   },
 ];

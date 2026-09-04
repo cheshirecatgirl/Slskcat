@@ -1,6 +1,7 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
+  import * as session from "../lib/session";
   import { defaultSettings } from "../lib/types";
 
   let username = $state("");
@@ -46,6 +47,34 @@
     }
   }
 
+  /**
+   * The account this form can return to, if there is one.
+   *
+   * Adding an account leaves a session running behind the form, so there is
+   * always a way back from that. A sign-in that failed has one only if it
+   * displaced an account that was working — switching to a name the server has
+   * since deleted otherwise ends in a form with nowhere to go but forward.
+   */
+  const backTo = $derived(
+    app.addingAccount || app.loginError
+      ? app.connected
+        ? app.username
+        : app.previousAccount
+      : null,
+  );
+
+  /** Undo whatever led here: close the form, or sign back in behind it. */
+  function back() {
+    const to = app.previousAccount;
+    app.addingAccount = false;
+    app.loginError = null;
+    app.previousAccount = null;
+    // Adding an account leaves the old one signed in, so closing the form is
+    // the whole of it. Anything else got here by ending that session, and
+    // getting back means starting it again.
+    if (!app.connected && to) void session.switchTo(to);
+  }
+
   const canSubmit = $derived(
     username.trim().length > 0 && password.length > 0 && !app.connecting,
   );
@@ -84,8 +113,18 @@
          nothing to fill in, and flashing an unusable form for the length of a
          handshake reads as a glitch. -->
     <div class="waiting">
-      <div class="mark" aria-hidden="true"></div>
-      <p>Signing in as <strong>{app.settings?.username ?? ""}</strong>…</p>
+      <div class="mark" aria-hidden="true">
+        <!-- A cat, drawn rather than fetched: two ears, two eyes, a nose. -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4.6 3.2a1 1 0 0 1 1.3-.1L9.2 5.6a9.6 9.6 0 0 1 5.6 0l3.3-2.5a1 1 0 0 1 1.6.9l-.5 4.4a8 8 0 0 1 1 3.8c0 4.6-3.9 8-8.2 8s-8.2-3.4-8.2-8a8 8 0 0 1 1-3.8l-.5-4.4a1 1 0 0 1 .3-.8Zm2 2.6.3 2.6-.4.6a6 6 0 0 0-.8 3c0 3.4 2.9 6 6.3 6s6.3-2.6 6.3-6a6 6 0 0 0-.8-3l-.4-.6.3-2.6-1.8 1.4-.6-.2a7.7 7.7 0 0 0-5.4 0l-.6.2-1.8-1.4ZM9.4 11a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Zm5.2 0a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 14.6c.6 0 1.1.3 1.1.7 0 .5-.5.9-1.1.9s-1.1-.4-1.1-.9c0-.4.5-.7 1.1-.7Z"
+        />
+      </svg>
+      </div>
+      <p>
+        {app.reconnecting ? "Reconnecting" : "Connecting"} as
+        <strong>{app.settings?.username ?? ""}</strong>…
+      </p>
     </div>
   {:else}
   <form onsubmit={submit}>
@@ -182,11 +221,12 @@
       {app.connecting ? "Connecting…" : app.addingAccount ? "Add account" : "Sign in"}
     </button>
 
-    {#if app.addingAccount}
-      <!-- The session is still running behind this; without a way back the
-           only exit from adding an account was to sign into one. -->
-      <button class="back" type="button" onclick={() => (app.addingAccount = false)}>
-        <span aria-hidden="true">←</span> Back to {app.username}
+    {#if backTo}
+      <button class="back" type="button" onclick={back}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M11 4.6 4.3 11.3a1 1 0 0 0 0 1.4L11 19.4l1.4-1.4-4.3-4.3H20v-2H8.1l4.3-4.3L11 4.6Z" />
+        </svg>
+        Back to {backTo}
       </button>
     {/if}
   </form>
@@ -231,16 +271,30 @@
     fill: #fff;
   }
 
+  /* Flush with the left edge of the fields above it: a way out reads as a
+     step back out of the form, not as another control inside it. */
   .back {
-    justify-self: start;
+    display: flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: 5px;
     margin-top: 2px;
-    padding: 5px 2px;
+    padding: 5px 6px 5px 0;
     font-size: 12.5px;
     color: var(--text-3);
     transition: color var(--fast);
   }
+  .back svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+    transition: transform var(--fast);
+  }
   .back:hover {
     color: var(--text-1);
+  }
+  .back:hover svg {
+    transform: translateX(-2px);
   }
 
   h1 {
@@ -278,6 +332,17 @@
     justify-items: center;
     gap: 14px;
     animation: rise var(--spring) both;
+  }
+  /* A handshake takes seconds and shows nothing while it does. Without this
+     the screen is indistinguishable from one that has stopped. */
+  .waiting .mark {
+    animation: breathe 1.7s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    50% {
+      transform: scale(1.07);
+      box-shadow: 0 9px 28px -5px var(--accent);
+    }
   }
   .waiting p {
     font-size: 13px;

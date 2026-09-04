@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
+  import * as session from "../lib/session";
   import { core } from "../lib/core";
   import type { Section } from "../lib/nav";
 
@@ -11,7 +12,6 @@
   /** Whether the account menu is showing. */
   let switching = $state(false);
 
-  /** Accounts other than the one signed in — the only ones worth offering. */
   /**
    * Accounts other than the one signed in, most recent first, capped at five.
    *
@@ -23,33 +23,9 @@
     (app.settings?.accounts ?? []).filter((name) => name !== app.username).slice(0, 5),
   );
 
-  /**
-   * Make an account current and end the session.
-   *
-   * Switching deliberately does not sign in: it fills the form and hands back
-   * control. Signing in on someone's behalf with a stored password is how you
-   * end up connected as an account you only meant to glance at, and the
-   * server treats a second login as a takeover of the first.
-   */
   async function switchTo(username: string) {
     switching = false;
-    try {
-      const next = await core.switchAccount(username);
-      app.settings = next;
-      // Held across the disconnect so the sign-in form never appears between
-      // the two sessions: with a remembered password there is nothing to fill
-      // in, and a form shown for the length of a handshake reads as a flicker.
-      app.connecting = next.password.length > 0;
-      app.resuming = app.connecting;
-      await core.disconnect();
-      if (next.password.length > 0) {
-        app.settings = await core.connect(next);
-      }
-    } catch (error) {
-      app.connecting = false;
-      app.resuming = false;
-      app.notify(String(error), "danger");
-    }
+    await session.switchTo(username);
   }
 
   async function forget(username: string) {
@@ -68,9 +44,12 @@
    * signing into it again. `addingAccount` leaves the session alone until a
    * new one actually signs in.
    */
-  async function addAccount() {
+  function addAccount() {
     switching = false;
     app.addingAccount = true;
+    // Signing in as the new account ends this one, so if it is refused the
+    // form needs to know which name it interrupted.
+    app.previousAccount = app.username || null;
   }
 
   // Inline SVG rather than an icon package: a handful of paths costs nothing

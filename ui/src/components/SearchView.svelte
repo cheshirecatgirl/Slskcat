@@ -16,7 +16,9 @@
   let query = $state("");
   let filter = $state("");
   let readyOnly = $state(false);
-  let chosen = $state("any");
+  /** Formats ticked. Empty means every format. */
+  let chosen = $state<Record<string, true>>({});
+  let formatsOpen = $state(false);
   let sortKey = $state<"name" | "size" | "bitrate" | "speed" | "user">("speed");
   let sortAsc = $state(false);
   /** Collapsed nodes, by key. Absent means open. */
@@ -62,7 +64,8 @@
     const needle = filter.trim().toLowerCase();
     if (needle) list = list.filter((r) => r.path.toLowerCase().includes(needle));
     if (readyOnly) list = list.filter((r) => r.freeSlots > 0);
-    if (chosen !== "any") list = list.filter((r) => format(r.path) === chosen);
+    const wanted = Object.keys(chosen);
+    if (wanted.length > 0) list = list.filter((r) => chosen[format(r.path)]);
 
     const direction = sortAsc ? 1 : -1;
     // Copy before sorting: the source array is shared state.
@@ -223,7 +226,7 @@
       const id = await core.search(text);
       app.startSearch(id, text);
       filter = "";
-      chosen = "any";
+      chosen = {};
       if (viewport) viewport.scrollTop = 0;
     } catch (error) {
       app.notify(String(error), "danger");
@@ -292,6 +295,23 @@
     return app.downloaded.has(AppState.had(fileName(row.path), row.size)) ? "had" : null;
   }
 
+  /** How the format button reads: nothing, one name, or a count. */
+  const formatLabel = $derived.by(() => {
+    const picked = Object.keys(chosen);
+    if (picked.length === 0) return "All formats";
+    if (picked.length === 1) return picked[0]?.toUpperCase() ?? "All formats";
+    return `${picked.length} formats`;
+  });
+
+  function toggleFormat(kind: string) {
+    if (chosen[kind]) {
+      const { [kind]: _gone, ...rest } = chosen;
+      chosen = rest;
+    } else {
+      chosen = { ...chosen, [kind]: true };
+    }
+  }
+
   /** Sort choices, now that there is no column header to click. */
   const SORTS: { key: typeof sortKey; label: string }[] = [
     { key: "speed", label: "Speed" },
@@ -348,20 +368,50 @@
   {:else}
     <div class="toolbar">
       <input class="field slim" bind:value={filter} placeholder="Filter these results…" />
-      <select class="field slim auto" bind:value={chosen}>
-        <option value="any">Any format</option>
-        {#each formats as group (group.label)}
-          <optgroup label={group.label}>
-            {#each group.formats as ext (ext)}
-              <option value={ext}>{ext.toUpperCase()}</option>
+      <!-- A menu rather than a select: picking three formats out of a select
+           means opening it three times, because it closes on every choice. -->
+      <div class="picker">
+        <button
+          class="field slim auto"
+          class:on={formatsOpen}
+          onclick={() => (formatsOpen = !formatsOpen)}
+          aria-expanded={formatsOpen}
+        >
+          {formatLabel}
+          <svg class="caret" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2.5 4.5 6 8l3.5-3.5" />
+          </svg>
+        </button>
+
+        {#if formatsOpen}
+          <div class="menu" role="menu">
+            <button
+              class="row"
+              role="menuitemcheckbox"
+              aria-checked={Object.keys(chosen).length === 0}
+              onclick={() => (chosen = {})}
+            >
+              <span class="tick">{Object.keys(chosen).length === 0 ? "✓" : ""}</span>
+              All formats
+            </button>
+            {#each formats as group (group.label)}
+              <p class="head">{group.label}</p>
+              {#each group.formats as ext (ext)}
+                <button
+                  class="row"
+                  role="menuitemcheckbox"
+                  aria-checked={!!chosen[ext]}
+                  onclick={() => toggleFormat(ext)}
+                >
+                  <span class="tick">{chosen[ext] ? "✓" : ""}</span>
+                  {ext.toUpperCase()}
+                </button>
+              {/each}
             {/each}
-          </optgroup>
-        {/each}
-      </select>
-      <label class="check">
-        <input type="checkbox" bind:checked={readyOnly} />
-        <span>Free slots only</span>
-      </label>
+          </div>
+        {/if}
+      </div>
+
       <select
         class="field slim auto"
         value={sortKey}
@@ -371,16 +421,21 @@
           <option value={option.key}>Sort: {option.label}</option>
         {/each}
       </select>
-      <button
-        class="btn quiet small"
-        onclick={() => (sortAsc = !sortAsc)}
-        title={sortAsc ? "Ascending" : "Descending"}
-        aria-label={sortAsc ? "Ascending" : "Descending"}
+      <select
+        class="field slim auto"
+        value={sortAsc ? "asc" : "desc"}
+        onchange={(event) => (sortAsc = event.currentTarget.value === "asc")}
       >
-        {sortAsc ? "▲" : "▼"}
-      </button>
+        <option value="desc">Order: Descending</option>
+        <option value="asc">Order: Ascending</option>
+      </select>
+      <label class="check">
+        <input type="checkbox" bind:checked={readyOnly} />
+        <span>Free slots only</span>
+      </label>
       <span class="summary num">
-        <strong>{rows.length.toLocaleString()}</strong> of {search.rows.length.toLocaleString()}
+        <strong>{rows.length.toLocaleString()}</strong> of
+        <strong>{search.rows.length.toLocaleString()}</strong>
         {#if search.running}<span class="running">· searching…</span>{/if}
       </span>
       {#if search.running}
@@ -491,13 +546,13 @@
   /* Text scales with the row it sits in: a file is the baseline, a folder
      groups files, a peer heads folders. Same ratios as the heights. */
   .tuser .uname {
-    font-size: 18.75px;
+    font-size: 15.6px;
   }
   .tfolder {
     height: 51px;
   }
   .tfolder .fold {
-    font-size: 15.625px;
+    font-size: 14.1px;
   }
   .tuser:hover {
     background: var(--surface-3);
@@ -744,6 +799,84 @@
     50% {
       opacity: 1;
     }
+  }
+
+  /* The format menu stays open while formats are ticked, which a `select`
+     cannot do — it closes on every choice. */
+  .picker {
+    position: relative;
+    flex: none;
+  }
+  /* Spaced to land the chevron exactly where a select's does, so the two
+     controls beside it do not read as a different kind of thing. */
+  .picker > .field {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: auto;
+    padding-right: 8px;
+    cursor: pointer;
+  }
+  .picker > .field.on {
+    border-color: var(--accent);
+  }
+  .picker .caret {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: var(--text-3);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* The slim padding leaves no room for the chevron app.css draws. */
+  select.field.slim {
+    padding-right: 26px;
+  }
+  .menu {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    z-index: 3;
+    display: grid;
+    gap: 1px;
+    min-width: 168px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 5px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line-soft);
+    background: var(--surface-1);
+    box-shadow: var(--shadow);
+  }
+  .menu .head {
+    padding: 7px 8px 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .menu .row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+    text-align: left;
+    transition: background var(--fast);
+  }
+  .menu .row:hover {
+    background: var(--accent-quiet);
+  }
+  .menu .tick {
+    flex: none;
+    width: 10px;
+    font-size: 10px;
+    color: var(--accent);
   }
 
   .toolbar {

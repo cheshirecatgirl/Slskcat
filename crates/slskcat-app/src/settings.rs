@@ -113,11 +113,11 @@ impl Default for Settings {
 impl Settings {
     /// Record the current account as the most recently used one.
     ///
-    /// Called on save rather than on sign-in so the list only ever names
-    /// accounts the user actually configured — a typo in the form that never
-    /// reaches the server still gets saved, but a name never typed does not
-    /// appear at all.
-    fn remember_account(&mut self) {
+    /// Only ever called for an account that has signed in. A switcher listing
+    /// names that do not work is worse than one listing none: every failed
+    /// attempt left its typo behind, and the list filled with accounts that
+    /// could never be switched to.
+    pub(crate) fn remember_account(&mut self) {
         if self.username.is_empty() {
             return;
         }
@@ -280,9 +280,10 @@ pub fn load(app: &AppHandle) -> Result<Settings, String> {
 /// file cannot be encoded or written. A credential store that cannot be
 /// reached is reported through `keychain_available`, not as an error.
 pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
-    let mut settings = settings.clone();
-    settings.remember_account();
-
+    let settings = settings.clone();
+    // Deliberately not remembered here: saving happens on every settings
+    // change and on every sign-in attempt, successful or not. `remember` is
+    // called by the one caller that knows the account works.
     let file = path(app)?;
     let text = serde_json::to_string_pretty(&settings.for_disk())
         .map_err(|error| format!("Could not encode settings: {error}"))?;
@@ -299,6 +300,17 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
     let mut saved = settings;
     saved.keychain_available = stored || !saved.remember_password;
     Ok(saved)
+}
+
+/// Record an account that has just signed in successfully.
+///
+/// # Errors
+/// If the settings cannot be read or written.
+pub fn remember(app: &AppHandle, username: &str) -> Result<Settings, String> {
+    let mut settings = load(app)?;
+    username.clone_into(&mut settings.username);
+    settings.remember_account();
+    save(app, &settings)
 }
 
 /// Switch the stored settings to another known account.

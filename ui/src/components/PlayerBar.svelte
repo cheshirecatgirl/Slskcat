@@ -12,7 +12,7 @@
   // Every control writes to the player's fields; this is the one place they
   // reach the element and the graph, so nothing has to remember to apply them.
   $effect(() => {
-    void [player.volume, player.speed, player.keepPitch, player.reverb];
+    void [player.volume, player.speed, player.pitch, player.reverb];
     player.apply();
   });
 
@@ -100,13 +100,25 @@
           />
         </label>
 
-        <label class="check">
-          <input type="checkbox" bind:checked={player.keepPitch} />
-          <span>Keep pitch when speed changes</span>
+        <label>
+          <span>
+            Pitch
+            <em class="num">{player.pitch > 0 ? "+" : ""}{player.pitch.toFixed(1)}</em>
+          </span>
+          <input
+            type="range"
+            min="-12"
+            max="12"
+            step="0.5"
+            value={player.pitch}
+            disabled={!player.pitchAvailable}
+            oninput={(event) => (player.pitch = Number(event.currentTarget.value))}
+          />
         </label>
         <p class="note">
-          Off, speed and pitch move together the way a record at the wrong speed
-          does. On, only the tempo changes.
+          {player.pitchAvailable
+            ? "Semitones, independent of speed. Both move while the track plays."
+            : "Pitch needs an audio worklet, which this platform does not provide."}
         </p>
 
         <label>
@@ -120,6 +132,14 @@
             oninput={(event) => (player.reverb = Number(event.currentTarget.value))}
           />
         </label>
+        <button
+          class="reset"
+          onclick={() => {
+            player.speed = 1;
+            player.pitch = 0;
+            player.reverb = 0;
+          }}>Reset</button
+        >
       </div>
     {/if}
   {/if}
@@ -248,12 +268,23 @@
     font-style: normal;
     color: var(--text-1);
   }
-  .panel .check {
-    grid-auto-flow: column;
-    justify-content: start;
-    align-items: center;
-    gap: 8px;
+  .reset {
+    justify-self: start;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    font-size: 11.5px;
+    color: var(--text-2);
+    transition: background var(--fast), color var(--fast);
   }
+  .reset:hover {
+    background: var(--surface-3);
+    color: var(--text-1);
+  }
+  .panel input:disabled {
+    opacity: 0.45;
+  }
+
   .panel .note {
     margin-top: -5px;
     font-size: 11px;

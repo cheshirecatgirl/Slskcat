@@ -59,6 +59,14 @@
       // between sessions: without this the remembered list would sit there
       // named but silent.
       if (event.type === "connected") {
+        // Recorded here rather than on save: an account only belongs in the
+        // switcher once the server has accepted it, or a mistyped name is
+        // offered forever as somewhere to switch to.
+        const who = event.data.username;
+        void core
+          .rememberAccount(who)
+          .then((saved) => (app.settings = saved))
+          .catch(() => {});
         for (const room of app.settings?.rooms ?? []) fire(core.joinRoom(room));
       }
       // A finished transfer is the one thing that changes what is on disk
