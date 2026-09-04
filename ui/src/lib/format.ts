@@ -61,11 +61,46 @@ export function tailPath(path: string, segments = 2): string {
   return parts.slice(-segments).join(" · ");
 }
 
-/** Lowercased extension without the dot, or `""`. */
+/** Lowercased text after the last dot, or `""`. Not necessarily a format. */
 export function extension(path: string): string {
   const name = fileName(path);
   const cut = name.lastIndexOf(".");
   return cut === -1 ? "" : name.slice(cut + 1).toLowerCase();
+}
+
+/**
+ * Formats worth offering as a filter.
+ *
+ * A closed set, because the open one is wrong. Peers name files anything:
+ * `Show - 01v2.5`, `Album Vol.2`, `Live 1993.09.12` all end in a dot and
+ * something, and taking whatever follows the last dot filled the format menu
+ * with episode numbers and dates. Nothing here is guessed — a name whose tail
+ * is not one of these has no format, and says so.
+ */
+const FORMATS = new Set([
+  // lossless
+  "flac", "wav", "aiff", "aif", "alac", "ape", "wv", "dsf", "dff", "tak", "tta",
+  // lossy
+  "mp3", "m4a", "aac", "ogg", "oga", "opus", "wma", "mpc", "ac3", "dts",
+  // video
+  "mkv", "mp4", "m4v", "avi", "mov", "webm", "wmv", "flv", "mpg", "mpeg", "ts", "vob",
+  // things that travel with a rip
+  "cue", "log", "txt", "nfo", "sfv", "m3u", "m3u8", "pdf",
+  "jpg", "jpeg", "png", "gif", "webp",
+  "zip", "rar", "7z", "iso",
+]);
+
+/**
+ * The file's format, or `""` when its name does not end in one.
+ *
+ * Deliberately separate from [`extension`]: the raw tail is still the honest
+ * answer to "what follows the last dot", and this is the answer to "what kind
+ * of file is this", which is a different question with a different failure
+ * mode.
+ */
+export function format(path: string): string {
+  const tail = extension(path);
+  return FORMATS.has(tail) ? tail : "";
 }
 
 /**

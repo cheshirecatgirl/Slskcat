@@ -1,21 +1,22 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app, type ResultRow } from "../lib/state.svelte";
-  import { bitrate, bytes, duration, extension, fileName, parentPath, rate, tailPath } from "../lib/format";
+  import { bitrate, bytes, duration, fileName, format, parentPath, rate, tailPath } from "../lib/format";
 
   let query = $state("");
   let filter = $state("");
   let readyOnly = $state(false);
-  let format = $state("any");
+  let chosen = $state("any");
   let sortKey = $state<"name" | "size" | "bitrate" | "speed" | "user">("speed");
   let sortAsc = $state(false);
-  /** Grouped by peer and folder, the way SoulseekQt shows results, or flat. */
-  let mode = $state<"folders" | "files">("folders");
   /** Collapsed nodes, by key. Absent means open. */
   let closed = $state<Record<string, true>>({});
 
-  /** Row height in px. Fixed, which is what makes windowing cheap and exact. */
-  const ROW = 34;
+  /**
+   * Row heights. A peer heads a section and a folder groups one, so both are
+   * given the weight to be found while scrolling past; a file is a file.
+   */
+  const HEIGHT = { user: 68, folder: 51, file: 34 } as const;
   /** Rows rendered beyond the viewport, so fast scrolling never shows gaps. */
   const OVERSCAN = 6;
 
@@ -28,8 +29,8 @@
   const formats = $derived.by(() => {
     const seen = new Set<string>();
     for (const row of search?.rows ?? []) {
-      const ext = extension(row.path);
-      if (ext) seen.add(ext);
+      const kind = format(row.path);
+      if (kind) seen.add(kind);
     }
     return [...seen].sort();
   });
@@ -40,7 +41,7 @@
     const needle = filter.trim().toLowerCase();
     if (needle) list = list.filter((r) => r.path.toLowerCase().includes(needle));
     if (readyOnly) list = list.filter((r) => r.freeSlots > 0);
-    if (format !== "any") list = list.filter((r) => extension(r.path) === format);
+    if (chosen !== "any") list = list.filter((r) => format(r.path) === chosen);
 
     const direction = sortAsc ? 1 : -1;
     // Copy before sorting: the source array is shared state.
@@ -85,7 +86,6 @@
   }
 
   const lines = $derived.by(() => {
-    if (mode !== "folders") return [] as Line[];
     const out: Line[] = [];
     for (const [username, mine] of groupBy(rows, (r) => r.username)) {
       const userKey = `u ${username}`;
@@ -122,14 +122,42 @@
     return out;
   });
 
-  /** What the scrollbar and the window are measured against. */
-  const length = $derived(mode === "folders" ? lines.length : rows.length);
+  /**
+   * Where each line starts, and how tall the list is.
+   *
+   * Rows are no longer one height, so the window cannot be found by dividing.
+   * The offsets are built in the pass that builds the lines and searched when
+   * scrolling, so the scroll handler still does no work proportional to the
+   * length of the list.
+   */
+  const layout = $derived.by(() => {
+    const tops = new Array<number>(lines.length);
+    let y = 0;
+    for (const [index, line] of lines.entries()) {
+      tops[index] = y;
+      y += HEIGHT[line.kind];
+    }
+    return { tops, total: y };
+  });
 
-  // The rendered window: only these exist in the DOM at any moment.
-  const first = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
-  const count = $derived(Math.ceil(viewportHeight / ROW) + OVERSCAN * 2);
-  const visible = $derived(rows.slice(first, first + count));
-  const visibleLines = $derived(lines.slice(first, first + count));
+  /** The last line starting at or before `y`. */
+  function lineAt(tops: number[], y: number): number {
+    let low = 0;
+    let high = tops.length - 1;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if ((tops[mid] ?? 0) <= y) low = mid;
+      else high = mid - 1;
+    }
+    return Math.max(0, low);
+  }
+
+  const first = $derived(Math.max(0, lineAt(layout.tops, scrollTop) - OVERSCAN));
+  const last = $derived(
+    Math.min(lines.length, lineAt(layout.tops, scrollTop + viewportHeight) + OVERSCAN + 1),
+  );
+  const visibleLines = $derived(lines.slice(first, last));
+  const offset = $derived(layout.tops[first] ?? 0);
 
   function toggle(key: string) {
     // Reassigned rather than mutated: the record is what the tree reads.
@@ -161,13 +189,9 @@
   });
 
   function sortBy(key: typeof sortKey) {
-    if (sortKey === key) {
-      sortAsc = !sortAsc;
-    } else {
-      sortKey = key;
-      // Names read best A–Z; every numeric column reads best largest-first.
-      sortAsc = key === "name" || key === "user";
-    }
+    sortKey = key;
+    // Names read best A–Z; every numeric field reads best largest-first.
+    sortAsc = key === "name" || key === "user";
   }
 
   async function submit(event: SubmitEvent) {
@@ -178,7 +202,7 @@
       const id = await core.search(text);
       app.startSearch(id, text);
       filter = "";
-      format = "any";
+      chosen = "any";
       if (viewport) viewport.scrollTop = 0;
     } catch (error) {
       app.notify(String(error), "danger");
@@ -220,12 +244,13 @@
     }
   }
 
-  const columns: { key: typeof sortKey; label: string; cls: string }[] = [
-    { key: "name", label: "Name", cls: "c-name" },
-    { key: "size", label: "Size", cls: "c-size" },
-    { key: "bitrate", label: "Bitrate", cls: "c-rate" },
-    { key: "user", label: "User", cls: "c-user" },
-    { key: "speed", label: "Speed", cls: "c-speed" },
+  /** Sort choices, now that there is no column header to click. */
+  const SORTS: { key: typeof sortKey; label: string }[] = [
+    { key: "speed", label: "Speed" },
+    { key: "size", label: "Size" },
+    { key: "bitrate", label: "Bitrate" },
+    { key: "name", label: "Name" },
+    { key: "user", label: "User" },
   ];
 </script>
 
@@ -271,7 +296,7 @@
   {:else}
     <div class="toolbar">
       <input class="field slim" bind:value={filter} placeholder="Filter these results…" />
-      <select class="field slim auto" bind:value={format}>
+      <select class="field slim auto" bind:value={chosen}>
         <option value="any">Any format</option>
         {#each formats as ext (ext)}
           <option value={ext}>{ext.toUpperCase()}</option>
@@ -279,16 +304,25 @@
       </select>
       <label class="check">
         <input type="checkbox" bind:checked={readyOnly} />
-        <span>Free slots only</span>
+        <span>Online only</span>
       </label>
-      <div class="seg" role="group" aria-label="Result layout">
-        <button class="segbtn" class:on={mode === "folders"} onclick={() => (mode = "folders")}>
-          Folders
-        </button>
-        <button class="segbtn" class:on={mode === "files"} onclick={() => (mode = "files")}>
-          Files
-        </button>
-      </div>
+      <select
+        class="field slim auto"
+        value={sortKey}
+        onchange={(event) => sortBy(event.currentTarget.value as typeof sortKey)}
+      >
+        {#each SORTS as option (option.key)}
+          <option value={option.key}>Sort: {option.label}</option>
+        {/each}
+      </select>
+      <button
+        class="btn quiet small"
+        onclick={() => (sortAsc = !sortAsc)}
+        title={sortAsc ? "Ascending" : "Descending"}
+        aria-label={sortAsc ? "Ascending" : "Descending"}
+      >
+        {sortAsc ? "▲" : "▼"}
+      </button>
       <span class="summary num">
         {rows.length.toLocaleString()} of {search.rows.length.toLocaleString()}
         {#if search.running}<span class="running">· searching…</span>{/if}
@@ -298,34 +332,25 @@
       {/if}
     </div>
 
-    {#if mode === "files"}
-    <div class="head">
-      {#each columns as col (col.key)}
-        <button class="th {col.cls}" onclick={() => sortBy(col.key)}>
-          <span>{col.label}</span>
-          {#if sortKey === col.key}<span class="caret">{sortAsc ? "▲" : "▼"}</span>{/if}
-        </button>
-      {/each}
-      <span class="th c-act"></span>
-    </div>
-    {/if}
 
     <div class="body" bind:this={viewport} onscroll={measure}>
       {#if rows.length === 0}
         <div class="empty">
           <h3>{search.running ? "Waiting for peers" : "No matches"}</h3>
         </div>
-      {:else if mode === "folders"}
-        <!-- Same windowing as the flat list: the tree is a flat array of
-             fixed-height lines, so nesting costs nothing to scroll. -->
-        <div class="spacer" style="height: {length * ROW}px">
-          <div class="window" style="transform: translateY({first * ROW}px)">
+      {:else}
+        <!-- Windowed as before, but the rows are no longer one height, so the
+             spacer and the offset come from measured tops. -->
+        <div class="spacer" style="height: {layout.total}px">
+          <div class="window" style="transform: translateY({offset}px)">
             {#each visibleLines as line (line.key)}
               {#if line.kind === "user"}
                 <button class="tline tuser" onclick={() => toggle(line.key)}>
                   <span class="chev" class:open={!closed[line.key]} aria-hidden="true">▶</span>
                   <span class="uname">{line.username}</span>
-                  {#if line.freeSlots > 0}<span class="tag ok">free</span>{/if}
+                  <span class="tag" class:ok={line.freeSlots > 0}>
+                    {line.freeSlots > 0 ? "online" : "busy"}
+                  </span>
                   <span class="tmeta num">{line.files.toLocaleString()} files</span>
                   <span class="tmeta num dim">{rate(line.speed)}</span>
                 </button>
@@ -356,6 +381,7 @@
                 >
                   <span class="fname selectable">{fileName(line.row.path)}</span>
                   <span class="tmeta num">{bytes(line.row.size)}</span>
+                  <span class="tmeta kind">{format(line.row.path).toUpperCase()}</span>
                   <span class="tmeta num">
                     {bitrate(line.row.bitrate)}
                     {#if line.row.duration}<span class="dim">· {duration(line.row.duration)}</span>{/if}
@@ -366,67 +392,15 @@
             {/each}
           </div>
         </div>
-      {:else}
-        <!-- A spacer of the full height gives the scrollbar honest proportions
-             while only the visible window is actually rendered. -->
-        <div class="spacer" style="height: {rows.length * ROW}px">
-          <div class="window" style="transform: translateY({first * ROW}px)">
-            {#each visible as row, i (row.username + row.path)}
-              <div
-                class="row"
-                class:alt={(first + i) % 2 === 1}
-                ondblclick={() => download(row)}
-                role="button"
-                tabindex="-1"
-                title={row.path}
-              >
-                <div class="c-name">
-                  <span class="fname selectable">{fileName(row.path)}</span>
-                  <span class="fpath">{tailPath(parentPath(row.path))}</span>
-                </div>
-                <div class="c-size num">{bytes(row.size)}</div>
-                <div class="c-rate num">
-                  {bitrate(row.bitrate)}
-                  {#if row.duration}<span class="dim">· {duration(row.duration)}</span>{/if}
-                </div>
-                <div class="c-user">
-                  <span class="uname">{row.username}</span>
-                  {#if row.freeSlots > 0}<span class="tag ok">free</span>{/if}
-                </div>
-                <div class="c-speed num dim">{rate(row.speed)}</div>
-                <div class="c-act">
-                  <button class="btn small get" onclick={() => download(row)}>Get</button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        </div>
       {/if}
     </div>
   {/if}
 </div>
 
 <style>
-  /* --- grouped view: peer, then folder, then files ---------------------- */
-  .seg {
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-  }
-  .segbtn {
-    padding: 3px 10px;
-    border-radius: calc(var(--radius-sm) - 2px);
-    font-size: 11.5px;
-    color: var(--text-3);
-    transition: background var(--fast), color var(--fast);
-  }
-  .segbtn.on {
-    background: var(--surface-1);
-    color: var(--text-1);
-  }
-
+  /* These heights are the ones `HEIGHT` names in the script. They have to
+     agree: the window is positioned by arithmetic on those numbers, so a row
+     that renders taller than it was measured drifts away from its slot. */
   .tline {
     display: flex;
     align-items: center;
@@ -438,8 +412,19 @@
   }
   .tuser {
     gap: 8px;
+    height: 68px;
+    padding: 0 14px;
     background: var(--surface-2);
     font-weight: 500;
+  }
+  .tuser .uname {
+    font-size: 14px;
+  }
+  .tfolder {
+    height: 51px;
+  }
+  .tfolder .fold {
+    font-size: 13px;
   }
   .tuser:hover {
     background: var(--surface-3);
@@ -500,6 +485,17 @@
   .tline:hover .get,
   .tline .get:focus-visible {
     opacity: 1;
+  }
+
+  /* The format sits with the size rather than in the name: a peer's naming is
+     unreliable, and the extension is the one part that is not a description. */
+  .kind {
+    width: 46px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: var(--text-3);
+    text-align: right;
   }
 
   .tmeta {
@@ -648,63 +644,6 @@
     color: var(--accent);
   }
 
-  /* One grid definition, shared by the header and every row, so columns
-     cannot drift apart. */
-  .head,
-  .row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 82px 140px 170px 92px 56px;
-    align-items: center;
-    gap: 12px;
-    padding: 0 18px;
-  }
-
-  .head {
-    height: 30px;
-    background: var(--surface-2);
-    border-radius: var(--radius-sm);
-    margin: 0 10px;
-    padding: 0 8px;
-  }
-  /*
-   * Deliberately not a flex container. Chromium gives `<button>` an internal
-   * anonymous wrapper that centres its children, and `justify-content` on the
-   * button does not override it — the labels end up centred in their columns.
-   * Plain inline flow inside the button sidesteps that entirely, and
-   * `text-align` then does the alignment honestly.
-   */
-  .th {
-    display: block;
-    padding: 0;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    text-align: left;
-    white-space: nowrap;
-  }
-  .th:hover {
-    color: var(--text-2);
-  }
-  .caret {
-    margin-left: 4px;
-    font-size: 8px;
-  }
-  .c-size,
-  .c-rate,
-  .c-speed {
-    justify-content: flex-end;
-    text-align: right;
-  }
-  /* The body cells are flex; the header cells are not, so they need the
-     text-align form of the same intent. */
-  .head .c-size,
-  .head .c-rate,
-  .head .c-speed {
-    text-align: right;
-  }
-
   .body {
     flex: 1;
     min-height: 0;
@@ -721,52 +660,11 @@
     right: 0;
     will-change: transform;
   }
-
-  .row {
-    height: 34px;
-    cursor: default;
-    transition: background var(--fast);
-  }
-  /* Zebra banding rather than rules: quieter, and easier to track across a
-     wide row. It is driven by the row's real index, not its DOM position —
-     `:nth-child` would band the sliding window instead of the data, and the
-     stripes would swap as you scroll. */
-  .row.alt {
-    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
-  }
-  .row:hover {
-    background: var(--accent-quiet);
-  }
-  .row:hover .get,
-  .row .get:focus-visible {
-    opacity: 1;
-  }
-
-  .c-name {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    line-height: 1.25;
-  }
   .fname {
     font-size: 12.5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .fpath {
-    font-size: 10.5px;
-    color: var(--text-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .c-user {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
   }
   .uname {
     font-size: 12.5px;
@@ -774,20 +672,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  .c-size,
-  .c-rate,
-  .c-speed {
-    font-size: 12px;
-    color: var(--text-2);
-  }
   .dim {
     color: var(--text-3);
-  }
-
-  .c-act {
-    display: flex;
-    justify-content: flex-end;
   }
   .get {
     opacity: 0;

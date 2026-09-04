@@ -372,13 +372,21 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Empty states sit near the top rather than dead centre.
+ *
+ * Centred in a tall pane puts the one line of text as far from the controls
+ * that would change it as the layout allows, and leaves the eye crossing an
+ * empty field to reach it. High enough to read at a glance, low enough not to
+ * crowd the toolbar above.
+ */
 .empty {
   display: grid;
-  place-content: center;
+  align-content: start;
   justify-items: center;
   gap: 7px;
   height: 100%;
-  padding: 48px;
+  padding: 22vh 48px 48px;
   color: var(--text-3);
   text-align: center;
 }
