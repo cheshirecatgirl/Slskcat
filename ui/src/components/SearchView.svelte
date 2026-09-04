@@ -1,6 +1,6 @@
 <script lang="ts">
   import { core } from "../lib/core";
-  import { app, type ResultRow } from "../lib/state.svelte";
+  import { app, AppState, type ResultRow } from "../lib/state.svelte";
   import { bitrate, bytes, duration, fileName, format, parentPath, rate, tailPath } from "../lib/format";
 
   let query = $state("");
@@ -304,7 +304,7 @@
       </select>
       <label class="check">
         <input type="checkbox" bind:checked={readyOnly} />
-        <span>Online only</span>
+        <span>Free slots only</span>
       </label>
       <select
         class="field slim auto"
@@ -348,9 +348,9 @@
                 <button class="tline tuser" onclick={() => toggle(line.key)}>
                   <span class="chev" class:open={!closed[line.key]} aria-hidden="true">▶</span>
                   <span class="uname">{line.username}</span>
-                  <span class="tag" class:ok={line.freeSlots > 0}>
-                    {line.freeSlots > 0 ? "online" : "busy"}
-                  </span>
+                  <!-- Free slots, not presence: every peer answering a search
+                       is online, and this says whether one can start now. -->
+                  {#if line.freeSlots > 0}<span class="tag ok">free</span>{/if}
                   <span class="tmeta num">{line.files.toLocaleString()} files</span>
                   <span class="tmeta num dim">{rate(line.speed)}</span>
                 </button>
@@ -379,6 +379,9 @@
                   tabindex="-1"
                   title={line.row.path}
                 >
+                  {#if app.downloaded.has(AppState.had(fileName(line.row.path), line.row.size))}
+                    <span class="had" title="Already in your download folder">✓</span>
+                  {/if}
                   <span class="fname selectable">{fileName(line.row.path)}</span>
                   <span class="tmeta num">{bytes(line.row.size)}</span>
                   <span class="tmeta kind">{format(line.row.path).toUpperCase()}</span>
@@ -489,6 +492,17 @@
 
   /* The format sits with the size rather than in the name: a peer's naming is
      unreliable, and the extension is the one part that is not a description. */
+  /* A file already on disk. Ahead of the name rather than after it, so a
+     folder of them reads as a column at a glance instead of needing the eye
+     to travel each line. */
+  .had {
+    flex: none;
+    width: 12px;
+    margin-right: -4px;
+    font-size: 11px;
+    color: var(--ok);
+  }
+
   .kind {
     width: 46px;
     font-size: 11px;

@@ -153,6 +153,17 @@ export class AppState {
   // --- peers ---
   users = $state<Record<string, UserSummary>>({});
 
+  // --- what is already on disk ---
+  /**
+   * Files in the download folder, keyed exactly as a result would be.
+   *
+   * Name and size, because the protocol carries no hash for a search result
+   * and never has. Two unrelated files agreeing on both an exact filename and
+   * an exact byte count is possible; it is a rarer mistake than making the
+   * user re-download something they already have.
+   */
+  downloaded = $state<Set<string>>(new Set());
+
   // --- notices ---
   notices = $state<Notice[]>([]);
   #nextNotice = 0;
@@ -201,6 +212,11 @@ export class AppState {
 
   get search(): Search | null {
     return this.searches.find((s) => s.id === this.activeSearch) ?? null;
+  }
+
+  /** The key a result and a local file have to agree on to be the same file. */
+  static had(name: string, size: number): string {
+    return `${name.toLowerCase()}\0${size}`;
   }
 
   notify(text: string, tone: Notice["tone"] = "warn") {

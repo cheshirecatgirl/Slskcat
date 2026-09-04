@@ -16,7 +16,8 @@
 // handlers below cannot borrow them however little they consume.
 #![allow(clippy::needless_pass_by_value)]
 
-pub mod settings;
+pub mod library;
+mod settings;
 
 use slskcat_core::command::SearchIds;
 use slskcat_core::model::{SearchId, TransferId};
@@ -259,6 +260,14 @@ fn set_download_slots(app: State<'_, App>, slots: usize) -> Result<(), String> {
     app.send(Command::SetDownloadSlots(slots))
 }
 
+/// Everything already in the download folder, so results can say which files
+/// are already had.
+#[tauri::command]
+fn downloaded_files(handle: AppHandle) -> Result<Vec<library::Downloaded>, String> {
+    let settings = settings::load(&handle)?;
+    Ok(library::scan(&settings.to_config().download_dir))
+}
+
 /// Build and run the application.
 ///
 /// # Panics
@@ -301,6 +310,7 @@ pub fn run() {
             set_shared_dirs,
             set_upload_slots,
             set_download_slots,
+            downloaded_files,
         ])
         .run(tauri::generate_context!())
         .expect("starting the slsk.cat window");

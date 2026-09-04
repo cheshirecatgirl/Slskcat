@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { core, onEvent } from "./lib/core";
-  import { app } from "./lib/state.svelte";
+  import { app, AppState } from "./lib/state.svelte";
   import type { Section } from "./lib/nav";
   import Sidebar from "./components/Sidebar.svelte";
   import Notices from "./components/Notices.svelte";
@@ -45,13 +45,33 @@
         app.notify(`Could not load settings: ${error}`, "danger");
       });
 
+    void refreshDownloaded();
+
     // The subscription resolves asynchronously; unsubscribing has to wait for
     // it, so the cleanup awaits the same promise rather than racing it.
-    const subscription = onEvent((event) => app.apply(event));
+    const subscription = onEvent((event) => {
+      app.apply(event);
+      // A finished transfer is the one thing that changes what is on disk
+      // while the app is running, so it is the only thing that re-reads it.
+      if (event.type === "transferUpdated" && event.data.state.type === "completed") {
+        void refreshDownloaded();
+      }
+    });
     return () => {
       void subscription.then((unlisten) => unlisten());
     };
   });
+
+  /** Re-read the download folder. Failure is silent: not knowing what is on
+      disk costs a hint, and is not worth a notice over. */
+  async function refreshDownloaded() {
+    try {
+      const files = await core.downloadedFiles();
+      app.downloaded = new Set(files.map((file) => AppState.had(file.name, file.size)));
+    } catch {
+      app.downloaded = new Set();
+    }
+  }
 
   function onKey(event: KeyboardEvent) {
     // Cmd/Ctrl-K opens the palette from anywhere, the way Arc's command bar
