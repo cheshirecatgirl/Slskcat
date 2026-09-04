@@ -35,6 +35,53 @@
 
   const peers = $derived(Object.keys(app.conversations).sort((a, b) => a.localeCompare(b)));
 
+  /** The people box filters rather than gates, the way the room box does. */
+  const friends = $derived.by(() => {
+    const needle = newPeer.trim().toLowerCase();
+    const kept = app.settings?.friends ?? [];
+    return needle ? kept.filter((name) => name.toLowerCase().includes(needle)) : kept;
+  });
+
+  /**
+   * Everyone seen, minus the friends already listed above them. Capped: a
+   * couple of busy rooms is a few thousand names, and a list that long is not
+   * a list anyone reads — it is what the filter is for.
+   */
+  const others = $derived.by(() => {
+    const needle = newPeer.trim().toLowerCase();
+    // Anyone already listed above — a friend, or someone with an open thread —
+    // is not listed again here.
+    const listed = new Set([...(app.settings?.friends ?? []), ...peers]);
+    const all = app.knownUsers.filter((name) => !listed.has(name));
+    return (needle ? all.filter((name) => name.toLowerCase().includes(needle)) : all).slice(0, 400);
+  });
+
+  /** Whether the typed name is worth offering as a new conversation. */
+  const unlisted = $derived.by(() => {
+    const typed = newPeer.trim();
+    if (!typed) return null;
+    const known = [...friends, ...others].some((name) => name.toLowerCase() === typed.toLowerCase());
+    return known ? null : typed;
+  });
+
+  async function setFriends(names: string[]) {
+    if (!app.settings) return;
+    try {
+      app.settings = await core.saveSettings({ ...app.settings, friends: names });
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
+  function isFriend(name: string): boolean {
+    return (app.settings?.friends ?? []).includes(name);
+  }
+
+  function toggleFriend(name: string) {
+    const kept = app.settings?.friends ?? [];
+    void setFriends(isFriend(name) ? kept.filter((n) => n !== name) : [...kept, name]);
+  }
+
   const messages = $derived.by(() => {
     if (!open) return [];
     return open.kind === "room"
@@ -77,7 +124,7 @@
     if (open?.kind === "room" && open.name === name) open = null;
   }
 
-  function startDirect(event: SubmitEvent) {
+  function startDirect(event: Event) {
     event.preventDefault();
     const name = newPeer.trim();
     if (!name) return;
@@ -137,18 +184,63 @@
     </div>
 
     {#if side === "users"}
-      <form class="newpeer" onsubmit={startDirect}>
-        <input class="field slim" bind:value={newPeer} placeholder="Message a user…" />
-      </form>
+      <div class="pane-head">
+        <form onsubmit={startDirect}>
+          <input class="field slim" bind:value={newPeer} placeholder="Find or message a user…" />
+        </form>
+      </div>
 
-      {#each peers as peer (peer)}
-        <div class="entry" class:active={open?.kind === "direct" && open.name === peer}>
-          <button class="pick" onclick={() => openDirect(peer)}>
-            <span class="name">{peer}</span>
+      {#if unlisted}
+        <button class="entry pick unlisted" onclick={startDirect}>
+          Message <strong>{unlisted}</strong>
+        </button>
+      {/if}
+
+      {#if peers.length > 0}
+        <p class="group">Conversations</p>
+        {#each peers as peer (peer)}
+          <div class="entry" class:active={open?.kind === "direct" && open.name === peer}>
+            <button class="pick" onclick={() => openDirect(peer)}>
+              <span class="name">{peer}</span>
+            </button>
+            <button
+              class="star"
+              class:on={isFriend(peer)}
+              title={isFriend(peer) ? "Remove from friends" : "Add to friends"}
+              onclick={() => toggleFriend(peer)}>★</button
+            >
+          </div>
+        {/each}
+      {/if}
+
+      {#if friends.length > 0}
+        <p class="group">Friends</p>
+        {#each friends as friend (friend)}
+          <div class="entry" class:active={open?.kind === "direct" && open.name === friend}>
+            <button class="pick" onclick={() => openDirect(friend)}>
+              <span class="name">{friend}</span>
+            </button>
+            <button class="star on" title="Remove from friends" onclick={() => toggleFriend(friend)}
+              >★</button
+            >
+          </div>
+        {/each}
+      {/if}
+
+      <p class="group">Seen this session</p>
+      {#each others as person (person)}
+        <div class="entry" class:active={open?.kind === "direct" && open.name === person}>
+          <button class="pick" onclick={() => openDirect(person)}>
+            <span class="name">{person}</span>
           </button>
+          <button class="star" title="Add to friends" onclick={() => toggleFriend(person)}>★</button>
         </div>
       {:else}
-        <p class="none">No conversations yet.</p>
+        <p class="none">
+          {app.knownUsers.length === 0
+            ? "Nobody yet. Join a room or run a search."
+            : "No matches."}
+        </p>
       {/each}
     {:else}
       <div class="pane-head">
@@ -250,6 +342,42 @@
     background: var(--surface-1);
     color: var(--text-1);
   }
+  /* Friends are marked in place rather than dragged between lists: the star
+     is next to the name it applies to, and the name does not move when it is
+     pressed. */
+  .star {
+    flex: none;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-3);
+    opacity: 0;
+    transition: opacity var(--fast), color var(--fast);
+  }
+  .entry:hover .star,
+  .star:focus-visible,
+  .star.on {
+    opacity: 1;
+  }
+  .star.on {
+    color: var(--accent);
+  }
+
+  /* A name typed that nobody has seen yet is still worth offering. */
+  .unlisted {
+    margin: 6px 10px 2px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-quiet);
+    color: var(--text-2);
+    font-size: 12.5px;
+    text-align: left;
+  }
+  .unlisted strong {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
   .segbtn .pip {
     padding: 0 5px;
     border-radius: 999px;
@@ -289,9 +417,6 @@
   }
   .field.slim:focus {
     border-color: var(--accent);
-  }
-  .newpeer {
-    padding: 4px 10px 2px;
   }
 
   .group {

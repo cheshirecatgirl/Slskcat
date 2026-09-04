@@ -127,6 +127,8 @@ export interface Settings {
   proxy: Proxy | null;
   searchTimeoutSecs: number;
   wishlist: string[];
+  /** People kept across sessions. Local only; the network has no such list. */
+  friends: string[];
   /** Known accounts on this machine, most recently used first. */
   accounts: string[];
   keychainAvailable: boolean;
@@ -151,6 +153,7 @@ export function defaultSettings(): Settings {
     proxy: null,
     searchTimeoutSecs: 12,
     wishlist: [],
+    friends: [],
     accounts: [],
     keychainAvailable: true,
   };
@@ -181,6 +184,7 @@ export function hydrateSettings(raw: Partial<Settings> | null | undefined): Sett
     proxy: from.proxy ?? base.proxy,
     searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
     wishlist: from.wishlist ?? base.wishlist,
+    friends: from.friends ?? base.friends,
     accounts: from.accounts ?? base.accounts,
     keychainAvailable: from.keychainAvailable ?? base.keychainAvailable,
   };

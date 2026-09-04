@@ -7,6 +7,48 @@
   let pending = $state(false);
   let open = $state<Record<string, boolean>>({});
 
+  /**
+   * The box filters the people already seen rather than gating on an exact
+   * name. Browsing used to require knowing who to ask before anything at all
+   * appeared, which is a barrier in front of a list the session already had.
+   */
+  const listed = $derived.by(() => {
+    const needle = who.trim().toLowerCase();
+    const kept = new Set(app.settings?.friends ?? []);
+    const known = app.knownUsers;
+    const ordered = [...known].sort((a, b) => {
+      // Friends first: they are the reason to keep a list at all.
+      const byFriend = Number(kept.has(b)) - Number(kept.has(a));
+      return byFriend !== 0 ? byFriend : a.localeCompare(b);
+    });
+    const matched = needle
+      ? ordered.filter((name) => name.toLowerCase().includes(needle))
+      : ordered;
+    return matched.slice(0, 400);
+  });
+
+  /** A name typed that nobody has been seen under is still worth asking. */
+  const unlisted = $derived.by(() => {
+    const typed = who.trim();
+    if (!typed) return null;
+    return listed.some((name) => name.toLowerCase() === typed.toLowerCase()) ? null : typed;
+  });
+
+  async function browse(name: string) {
+    // Deliberately does not fill the box. The box is the filter; writing the
+    // selection into it collapses the list to the one name just picked, which
+    // is the barrier this list exists to remove.
+    pending = true;
+    app.browseResult = null;
+    try {
+      await core.browseUser(name);
+      await core.requestUserInfo(name);
+    } catch (error) {
+      app.notify(String(error), "danger");
+      pending = false;
+    }
+  }
+
   const directories = $derived(app.browseResult ?? []);
   const info = $derived(app.browsing ? app.users[app.browsing] : undefined);
   const totals = $derived.by(() => {
@@ -19,20 +61,13 @@
     return { files, size };
   });
 
-  async function submit(event: SubmitEvent) {
+  // Asking the server about them at the same time is deliberate: whether they
+  // are online and how fast they are decides whether the listing is worth
+  // acting on.
+  function submit(event: SubmitEvent) {
     event.preventDefault();
     const name = who.trim();
-    if (!name) return;
-    pending = true;
-    app.browseResult = null;
-    try {
-      await core.browseUser(name);
-      // Ask the server about them at the same time: whether they are online
-      // and how fast they are decides whether the listing is worth acting on.
-      await core.requestUserInfo(name);
-    } catch (error) {
-      app.notify(String(error), "danger");
-    }
+    if (name) void browse(name);
   }
 
   // A listing arriving is what ends the pending state; the request itself only
@@ -60,19 +95,41 @@
 </script>
 
 <div class="view">
-  <header>
-    <form onsubmit={submit}>
-      <input
-        class="field"
-        bind:value={who}
-        placeholder="Browse a user's shares…"
-        spellcheck="false"
-        autocapitalize="off"
-      />
-      <button class="btn primary" type="submit" disabled={!who.trim() || pending}>
-        {pending ? "Asking…" : "Browse"}
+  <aside>
+    <div class="pane-head">
+      <form onsubmit={submit}>
+        <input
+          class="field slim"
+          bind:value={who}
+          placeholder="Find a user…"
+          spellcheck="false"
+          autocapitalize="off"
+        />
+      </form>
+    </div>
+
+    {#if unlisted}
+      <button class="entry unlisted" onclick={() => browse(unlisted ?? "")}>
+        Browse <strong>{unlisted}</strong>
       </button>
-    </form>
+    {/if}
+
+    {#each listed as person (person)}
+      <button class="entry" class:active={app.browsing === person} onclick={() => browse(person)}>
+        <span class="name">{person}</span>
+        {#if (app.settings?.friends ?? []).includes(person)}
+          <span class="star" aria-hidden="true">★</span>
+        {/if}
+      </button>
+    {:else}
+      <p class="none">
+        {app.knownUsers.length === 0 ? "Nobody seen yet." : "No matches."}
+      </p>
+    {/each}
+  </aside>
+
+  <section>
+    <header>
     {#if app.browsing && app.browseResult}
       <p class="meta">
         <strong>{app.browsing}</strong>
@@ -91,7 +148,7 @@
         {/if}
       </p>
     {/if}
-  </header>
+    </header>
 
   {#if pending}
     <div class="empty">
@@ -143,16 +200,91 @@
               {/each}
             </div>
           {/if}
-        </div>
-      {/each}
-    </div>
-  {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
 </div>
 
 <style>
   .view {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    height: 100%;
+  }
+  /* The same shape as the messages pane, for the same reason: a list of names
+     beside the thing a name opens. */
+  aside {
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    background: var(--surface-2);
+  }
+  .pane-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 11px 10px;
+    background: var(--surface-2);
+  }
+  /* The panel is `--surface-2`, which is what `.field` uses, so an unmodified
+     input would be invisible against it. */
+  .pane-head .field.slim {
+    padding: 5px 9px;
+    font-size: 12.5px;
+    background: var(--surface);
+    border-color: var(--line-soft);
+  }
+  .entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 6px 1px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background var(--fast);
+  }
+  .entry:hover {
+    background: var(--surface-3);
+  }
+  .entry.active {
+    background: var(--accent-quiet);
+    color: var(--accent);
+  }
+  .entry .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+  .entry .star {
+    flex: none;
+    font-size: 10px;
+    color: var(--accent);
+  }
+  .unlisted {
+    background: var(--accent-quiet);
+    color: var(--text-2);
+    font-size: 12.5px;
+  }
+  .unlisted strong {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+  .none {
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+
+  section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
     height: 100%;
   }
   header {
@@ -161,9 +293,6 @@
   form {
     display: flex;
     gap: 8px;
-  }
-  form .btn {
-    flex: none;
   }
   .meta {
     display: flex;

@@ -237,6 +237,36 @@ const run = async () => {
     await page.click('button[role="tab"]:has-text("Downloads")');
     await page.waitForTimeout(200);
 
+    // 4c. Browse: the people list, with the box filtering it
+    await page.click('button:has-text("Browse")');
+    await page.waitForTimeout(300);
+    await page.click('.entry:has-text("velvet_hare")');
+    await page.evaluate(() => {
+      window.__emit({
+        type: "browseReady",
+        data: {
+          username: "velvet_hare",
+          directories: [
+            {
+              path: "@@a1b2\\Music\\FLAC\\Aphex Twin - Selected Ambient Works 85-92",
+              files: [
+                { path: "01 Xtal.flac", size: 30_000_000, bitrate: 1411, duration: 297, vbr: false },
+                { path: "02 Tha.flac", size: 41_000_000, bitrate: 1411, duration: 365, vbr: false },
+              ],
+            },
+            {
+              path: "@@a1b2\\Music\\FLAC\\Boards of Canada - Geogaddi",
+              files: [
+                { path: "01 Ready Lets Go.flac", size: 8_000_000, bitrate: 1411, duration: 59, vbr: false },
+              ],
+            },
+          ],
+        },
+      });
+    });
+    await page.waitForTimeout(400);
+    await shot("4c-browse");
+
     // 5. Messages: the rooms list
     await page.evaluate(() => {
       window.__emit({

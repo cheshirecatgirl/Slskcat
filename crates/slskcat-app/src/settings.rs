@@ -58,6 +58,12 @@ pub struct Settings {
     /// look like the other.
     pub proxy: Option<Proxy>,
     pub search_timeout_secs: u64,
+    /// People kept across sessions, in the order they were added.
+    ///
+    /// The network has no friends list of its own — there is no server message
+    /// for one — so this is entirely local, which also means it never tells
+    /// anyone who you are interested in.
+    pub friends: Vec<String>,
     /// Every account this machine knows about, most recently used first.
     ///
     /// Names only. The credential store is already keyed by username, so the
@@ -89,6 +95,7 @@ impl Default for Settings {
             download_slots: config.download_slots,
             proxy: None,
             search_timeout_secs: config.search_timeout.as_secs(),
+            friends: Vec::new(),
             accounts: Vec::new(),
             wishlist: Vec::new(),
             keychain_available: false,

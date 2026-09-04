@@ -214,6 +214,32 @@ export class AppState {
     return this.searches.find((s) => s.id === this.activeSearch) ?? null;
   }
 
+  /**
+   * Everyone this session has seen, sorted.
+   *
+   * The server publishes a room list but no user list — there is no message
+   * that asks for one — so "everybody" is not available and is not what this
+   * is. It is the people who have actually appeared: the members of rooms
+   * joined, the peers who answered a search, anyone messaged, and anyone
+   * transferred with. On a busy room that is hundreds of names the moment you
+   * walk in, and none of it costs a request.
+   */
+  get knownUsers(): string[] {
+    const seen = new Set<string>();
+    for (const members of Object.values(this.roomUsers)) {
+      for (const member of members) seen.add(member);
+    }
+    for (const peer of Object.keys(this.conversations)) seen.add(peer);
+    for (const peer of Object.keys(this.users)) seen.add(peer);
+    for (const search of this.searches) {
+      for (const row of search.rows) seen.add(row.username);
+    }
+    for (const transfer of this.transferList) seen.add(transfer.username);
+    for (const upload of this.uploadList) seen.add(upload.username);
+    seen.delete(this.username);
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }
+
   /** The key a result and a local file have to agree on to be the same file. */
   static had(name: string, size: number): string {
     return `${name.toLowerCase()}\0${size}`;
