@@ -1,6 +1,6 @@
 <script lang="ts">
   import { core } from "../lib/core";
-  import { app, AppState, type ResultRow } from "../lib/state.svelte";
+  import { app, AppState, isLiveTransfer, type ResultRow } from "../lib/state.svelte";
   import { bitrate, bytes, duration, fileName, format, parentPath, rate, tailPath } from "../lib/format";
 
   let query = $state("");
@@ -244,6 +244,20 @@
     }
   }
 
+  /**
+   * Where a file stands: on disk, moving, or neither.
+   *
+   * Transfers are keyed by peer and path, which is exactly what a result
+   * carries, so a row can say what is happening to it without the transfers
+   * screen being open.
+   */
+  function progress(row: ResultRow): "had" | "doing" | null {
+    const transfer = app.transfers[AppState.key(row.username, row.path)];
+    if (transfer && isLiveTransfer(transfer.state)) return "doing";
+    if (transfer?.state.type === "completed") return "had";
+    return app.downloaded.has(AppState.had(fileName(row.path), row.size)) ? "had" : null;
+  }
+
   /** Sort choices, now that there is no column header to click. */
   const SORTS: { key: typeof sortKey; label: string }[] = [
     { key: "speed", label: "Speed" },
@@ -332,7 +346,6 @@
       {/if}
     </div>
 
-
     <div class="body" bind:this={viewport} onscroll={measure}>
       {#if rows.length === 0}
         <div class="empty">
@@ -361,17 +374,20 @@
                     <span class="fold selectable" title={line.folder}>
                       {tailPath(line.folder, 3) || "(root)"}
                     </span>
-                    <span class="tmeta num">{line.files.toLocaleString()}</span>
-                    <span class="tmeta num dim">{bytes(line.size)}</span>
                   </button>
-                  <button
-                    class="btn small get"
-                    onclick={() => downloadFolder(line.username, line.folder)}
-                  >
-                    Get folder
+                  <!-- Beside the name, where the eye already is, rather than at
+                       the far end of a wide row. A sibling of the toggle, not a
+                       child: a button inside a button is not valid markup and
+                       the browser rearranges it. -->
+                  <button class="go" onclick={() => downloadFolder(line.username, line.folder)}>
+                    Download folder
                   </button>
+                  <span class="spring"></span>
+                  <span class="tmeta num">{line.files.toLocaleString()}</span>
+                  <span class="tmeta num dim">{bytes(line.size)}</span>
                 </div>
               {:else}
+                {@const state = progress(line.row)}
                 <div
                   class="tline tfile"
                   ondblclick={() => download(line.row)}
@@ -379,17 +395,27 @@
                   tabindex="-1"
                   title={line.row.path}
                 >
-                  {#if app.downloaded.has(AppState.had(fileName(line.row.path), line.row.size))}
-                    <span class="had" title="Already in your download folder">✓</span>
-                  {/if}
+                  <span
+                    class="mark"
+                    class:had={state === "had"}
+                    class:doing={state === "doing"}
+                    title={state === "had"
+                      ? "Already downloaded"
+                      : state === "doing"
+                        ? "Downloading"
+                        : ""}
+                  >
+                    {state === "had" ? "✓" : state === "doing" ? "↓" : ""}
+                  </span>
                   <span class="fname selectable">{fileName(line.row.path)}</span>
+                  <button class="go" onclick={() => download(line.row)}>Download</button>
+                  <span class="spring"></span>
                   <span class="tmeta num">{bytes(line.row.size)}</span>
                   <span class="tmeta kind">{format(line.row.path).toUpperCase()}</span>
                   <span class="tmeta num">
                     {bitrate(line.row.bitrate)}
                     {#if line.row.duration}<span class="dim">· {duration(line.row.duration)}</span>{/if}
                   </span>
-                  <button class="btn small get" onclick={() => download(line.row)}>Get</button>
                 </div>
               {/if}
             {/each}
@@ -446,17 +472,18 @@
   }
   /* The grip is the whole clickable span of the folder line, so the button
      beside it stays a separate target rather than swallowing the toggle. */
+  /* The toggle takes only the space its own name needs, so the action can sit
+     directly beside it rather than after a stretched-out gap. */
   .tgrip {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex: 1;
     min-width: 0;
+    max-width: 100%;
     height: 100%;
     text-align: left;
   }
   .fold {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -469,38 +496,60 @@
     padding-left: 46px;
   }
   .tfile .fname {
-    flex: 1;
     min-width: 0;
+    max-width: 60%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 12.5px;
   }
 
-  /* Actions appear on hover, as they do on a flat row — and now on keyboard
-     focus too, which the flat rows never handled: a button at `opacity: 0` is
-     still focusable and still clickable, so tabbing to one was reaching
-     something invisible. */
-  .tline .get {
-    opacity: 0;
-    transition: opacity var(--fast);
-  }
-  .tline:hover .get,
-  .tline .get:focus-visible {
-    opacity: 1;
-  }
-
   /* The format sits with the size rather than in the name: a peer's naming is
      unreliable, and the extension is the one part that is not a description. */
-  /* A file already on disk. Ahead of the name rather than after it, so a
-     folder of them reads as a column at a glance instead of needing the eye
-     to travel each line. */
-  .had {
+  /* State ahead of the name rather than after it, so a folder of them reads
+     as a column at a glance instead of needing the eye to travel each line. */
+  .mark {
     flex: none;
     width: 12px;
     margin-right: -4px;
     font-size: 11px;
+    color: transparent;
+  }
+  .mark.had {
     color: var(--ok);
+  }
+  .mark.doing {
+    color: var(--accent);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  /* The action sits next to the name it acts on, appears on hover, and says
+     what it does. It does not take part in the layout when hidden, so the
+     columns beyond it do not shift as the pointer moves down the list. */
+  .go {
+    flex: none;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity var(--fast);
+  }
+  .tline:hover .go,
+  .go:focus-visible {
+    opacity: 1;
+  }
+  /* Takes the slack so the metadata stays right-aligned whether or not the
+     action is showing. */
+  .spring {
+    flex: 1;
   }
 
   .kind {
@@ -688,12 +737,5 @@
   }
   .dim {
     color: var(--text-3);
-  }
-  .get {
-    opacity: 0;
-    transition: opacity var(--fast), background var(--fast);
-  }
-  .get:focus-visible {
-    opacity: 1;
   }
 </style>

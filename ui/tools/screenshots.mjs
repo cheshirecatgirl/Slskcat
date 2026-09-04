@@ -76,6 +76,9 @@ const bridge = () => {
     uploadSlots: 3,
     searchTimeoutSecs: 12,
     wishlist: ["boards of canada — geogaddi vinyl rip", "coil musick to play in the dark 2"],
+    uiScale: 100,
+    rooms: [],
+    friends: [],
     proxy: null,
     accounts: ["slsk_listener", "night_shift", "tape_hiss"],
     keychainAvailable: true,
@@ -284,8 +287,6 @@ const run = async () => {
     await page.waitForTimeout(300);
     await page.click('button:has-text("nicotine")');
     await page.waitForTimeout(200);
-    // Opening a room no longer joins it, so the shot joins it deliberately.
-    await page.click('header button:has-text("Join")');
     await page.evaluate(() => {
       window.__emit({ type: "roomJoined", data: { room: "nicotine", users: ["a", "b", "c"] } });
       const say = (author, body) =>

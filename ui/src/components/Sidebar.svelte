@@ -27,9 +27,18 @@
   async function switchTo(username: string) {
     switching = false;
     try {
-      app.settings = await core.switchAccount(username);
+      const next = await core.switchAccount(username);
+      app.settings = next;
+      // Held across the disconnect so the sign-in form never appears between
+      // the two sessions: with a remembered password there is nothing to fill
+      // in, and a form shown for the length of a handshake reads as a flicker.
+      app.connecting = next.password.length > 0;
       await core.disconnect();
+      if (next.password.length > 0) {
+        app.settings = await core.connect(next);
+      }
     } catch (error) {
+      app.connecting = false;
       app.notify(String(error), "danger");
     }
   }
@@ -151,9 +160,8 @@
     {/if}
 
     <div class="who">
-      <span class="dot" aria-hidden="true"></span>
       <button
-        class="name selectable"
+        class="name"
         title="Switch account"
         aria-haspopup="menu"
         aria-expanded={switching}
@@ -162,6 +170,9 @@
         <span class="text">{app.username}</span>
         <span class="caret" class:open={switching} aria-hidden="true">▾</span>
       </button>
+      <!-- The same label peers get, rather than a coloured dot that says the
+           same thing without saying it. -->
+      <span class="tag ok">online</span>
       <button class="out" onclick={() => core.disconnect()} title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm6.2 4.8-1.4 1.4L16.6 11H8v2h8.6l-1.8 1.8 1.4 1.4L20.4 12l-4.2-4.2Z" />
@@ -311,14 +322,6 @@
     gap: 7px;
     min-width: 0;
   }
-  .dot {
-    width: 7px;
-    height: 7px;
-    flex: none;
-    border-radius: 999px;
-    background: var(--ok);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
-  }
   /* The name is the menu trigger now, so it needs a hit area and a hover —
      but it must still read as a name rather than as a control. */
   .name {
@@ -327,6 +330,9 @@
     gap: 5px;
     flex: 1;
     min-width: 0;
+    /* A control, not prose: dragging across the sidebar used to leave the
+       name and its arrow highlighted. */
+    user-select: none;
     padding: 2px 5px;
     margin-left: -5px;
     border-radius: 6px;

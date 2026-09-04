@@ -119,6 +119,15 @@ export class AppState {
   connecting = $state(false);
   username = $state("");
   loginError = $state<string | null>(null);
+  /**
+   * True when the server handed this account to another login.
+   *
+   * The one thing on this network that signs you out on purpose: the server
+   * keeps a single session per name, so a second sign-in cuts the first. It is
+   * kept apart from `loginError` because it is not a failure to fix — the
+   * credentials were right — and the way back is one button, not a form.
+   */
+  displaced = $state(false);
   shares = $state<{ directories: number; files: number } | null>(null);
 
   // --- search ---
@@ -240,6 +249,11 @@ export class AppState {
     return [...seen].sort((a, b) => a.localeCompare(b));
   }
 
+  /** The key a transfer is filed under, for looking one up by peer and path. */
+  static key(username: string, path: string): string {
+    return key(username, path);
+  }
+
   /** The key a result and a local file have to agree on to be the same file. */
   static had(name: string, size: number): string {
     return `${name.toLowerCase()}\0${size}`;
@@ -277,6 +291,7 @@ export class AppState {
         this.connecting = false;
         this.username = event.data.username;
         this.loginError = null;
+        this.displaced = false;
         break;
 
       case "loginFailed":
@@ -289,9 +304,8 @@ export class AppState {
         this.connected = false;
         this.connecting = false;
         const why = event.data;
-        if (why.type === "loggedInElsewhere") {
-          this.notify("Signed out: this account logged in somewhere else.", "danger");
-        } else if (why.type === "lost") {
+        this.displaced = why.type === "loggedInElsewhere";
+        if (why.type === "lost") {
           this.notify(why.data, "danger");
         }
         break;

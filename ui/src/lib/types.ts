@@ -127,6 +127,10 @@ export interface Settings {
   proxy: Proxy | null;
   searchTimeoutSecs: number;
   wishlist: string[];
+  /** Interface scale as a percentage; 100 is the designed size. */
+  uiScale: number;
+  /** Rooms to rejoin on sign-in. The server remembers none between sessions. */
+  rooms: string[];
   /** People kept across sessions. Local only; the network has no such list. */
   friends: string[];
   /** Known accounts on this machine, most recently used first. */
@@ -153,6 +157,8 @@ export function defaultSettings(): Settings {
     proxy: null,
     searchTimeoutSecs: 12,
     wishlist: [],
+    uiScale: 100,
+    rooms: [],
     friends: [],
     accounts: [],
     keychainAvailable: true,
@@ -184,6 +190,8 @@ export function hydrateSettings(raw: Partial<Settings> | null | undefined): Sett
     proxy: from.proxy ?? base.proxy,
     searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
     wishlist: from.wishlist ?? base.wishlist,
+    uiScale: from.uiScale ?? base.uiScale,
+    rooms: from.rooms ?? base.rooms,
     friends: from.friends ?? base.friends,
     accounts: from.accounts ?? base.accounts,
     keychainAvailable: from.keychainAvailable ?? base.keychainAvailable,

@@ -99,18 +99,62 @@
     if (log) log.scrollTop = log.scrollHeight;
   });
 
+  /**
+   * Open a room, joining it if it is not joined already.
+   *
+   * Joining is how the network works — a room sends nothing to anyone who has
+   * not joined it — so a click has to do it. What a click must not do is leave
+   * the pane blank while the server thinks about it: `joining` marks the room
+   * from the moment it is asked for, and the header says so until the join
+   * comes back.
+   */
   function openRoom(name: string) {
     open = { kind: "room", name };
+    if (!app.joined.includes(name)) void join(name);
   }
 
-  /** Join explicitly, which is also what sending a first line does. */
+  /** Rooms asked for but not yet confirmed. */
+  let joining = $state<Record<string, true>>({});
+
   async function join(name: string) {
+    joining = { ...joining, [name]: true };
     try {
       await core.joinRoom(name);
+      await remember([...(app.settings?.rooms ?? []).filter((r) => r !== name), name]);
     } catch (error) {
       app.notify(String(error), "danger");
     }
   }
+
+  /** Persist the rooms to come back to. */
+  async function remember(names: string[]) {
+    if (!app.settings) return;
+    try {
+      app.settings = await core.saveSettings({ ...app.settings, rooms: names });
+    } catch (error) {
+      app.notify(String(error), "danger");
+    }
+  }
+
+  // A join that has come back is no longer pending.
+  $effect(() => {
+    const settled = app.joined.filter((room) => joining[room]);
+    if (settled.length > 0) {
+      const next = { ...joining };
+      for (const room of settled) delete next[room];
+      joining = next;
+    }
+  });
+
+  /**
+   * The rooms to show as joined: the live ones, plus any remembered room that
+   * has not answered yet, so the list is populated before the server replies
+   * rather than filling in a second later.
+   */
+  const myRooms = $derived.by(() => {
+    const names = new Set([...(app.settings?.rooms ?? []), ...app.joined]);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  });
 
   function openDirect(name: string) {
     open = { kind: "direct", name };
@@ -121,6 +165,7 @@
 
   function leave(name: string) {
     void core.leaveRoom(name);
+    void remember((app.settings?.rooms ?? []).filter((room) => room !== name));
     if (open?.kind === "room" && open.name === name) open = null;
   }
 
@@ -140,11 +185,6 @@
     if (!body || !open) return;
 
     if (open.kind === "room") {
-      // Joining is what saying something requires, so it happens here rather
-      // than on the click that opened the room. Browsing the room list used
-      // to join every room touched on the way past, which announces you in
-      // each one and leaves the joined list full of places never spoken in.
-      // Commands reach the core in order, so the join precedes the line.
       if (!app.joined.includes(open.name)) await join(open.name);
       // The server echoes our own room lines back, so nothing is added here.
       void core.sendRoomMessage(open.name, body);
@@ -247,12 +287,13 @@
         <input class="field slim" bind:value={query} placeholder="Find a room…" />
       </div>
 
-      {#if app.joined.length > 0}
-        <p class="group">Joined</p>
-        {#each app.joined as room (room)}
+      {#if myRooms.length > 0}
+        <p class="group">My rooms</p>
+        {#each myRooms as room (room)}
           <div class="entry" class:active={open?.kind === "room" && open.name === room}>
             <button class="pick" onclick={() => openRoom(room)}>
               <span class="name">{room}</span>
+              {#if !app.joined.includes(room)}<span class="pending">joining…</span>{/if}
             </button>
             <button class="leave btn quiet small" onclick={() => leave(room)} title="Leave">×</button
             >
@@ -284,10 +325,7 @@
           {#if app.joined.includes(open.name)}
             <span class="num dim">{members.length.toLocaleString()} here</span>
           {:else}
-            <!-- Nothing arrives from a room until it is joined, so an
-                 unjoined one needs a way in that is not "say something". -->
-            <span class="num dim">not joined</span>
-            <button class="btn quiet small" onclick={() => open && join(open.name)}>Join</button>
+            <span class="num dim">joining…</span>
           {/if}
         {:else}
           <span class="tag">direct</span>
@@ -345,6 +383,12 @@
   /* Friends are marked in place rather than dragged between lists: the star
      is next to the name it applies to, and the name does not move when it is
      pressed. */
+  .pending {
+    flex: none;
+    font-size: 10.5px;
+    color: var(--text-3);
+  }
+
   .star {
     flex: none;
     padding: 3px 6px;

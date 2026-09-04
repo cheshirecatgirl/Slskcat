@@ -27,6 +27,25 @@
     prefilled = true;
   });
 
+  /** Coming back needs a password to come back with. */
+  const canResume = $derived(
+    (app.settings?.password ?? "").length > 0 && !app.connecting,
+  );
+
+  /** Take the account back. The server gives it to whoever logged in last. */
+  async function resume() {
+    const stored = app.settings;
+    if (!stored) return;
+    app.connecting = true;
+    app.loginError = null;
+    try {
+      app.settings = await core.connect(stored);
+    } catch (error) {
+      app.connecting = false;
+      app.loginError = String(error);
+    }
+  }
+
   const canSubmit = $derived(
     username.trim().length > 0 && password.length > 0 && !app.connecting,
   );
@@ -60,9 +79,30 @@
 </script>
 
 <div class="wrap">
+  {#if app.connecting && !app.loginError}
+    <!-- Signing in without a form: with a remembered password there is
+         nothing to fill in, and flashing an unusable form for the length of a
+         handshake reads as a glitch. -->
+    <div class="waiting">
+      <div class="mark" aria-hidden="true"></div>
+      <p>Signing in as <strong>{app.settings?.username ?? ""}</strong>…</p>
+    </div>
+  {:else}
   <form onsubmit={submit}>
     <div class="mark" aria-hidden="true"></div>
     <h1>Sign in</h1>
+
+    {#if app.displaced}
+      <!-- Not a failure: the password was right and the server simply handed
+           the name to a newer session. One button is the whole remedy. -->
+      <div class="displaced" role="status">
+        <p>Your account was signed in somewhere else.</p>
+        <p class="why">The server allows one session per account, so this one was ended.</p>
+        <button class="btn primary" type="button" onclick={resume} disabled={!canResume}>
+          Go back online
+        </button>
+      </div>
+    {/if}
 
     <label>
       <span>Username</span>
@@ -135,6 +175,7 @@
       {app.connecting ? "Connecting…" : "Sign in"}
     </button>
   </form>
+  {/if}
 </div>
 
 <style>
@@ -200,6 +241,37 @@
   .check span {
     font-weight: 400;
     color: var(--text-2);
+  }
+
+  .waiting {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    animation: rise var(--spring) both;
+  }
+  .waiting p {
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .waiting strong {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
+  .displaced {
+    display: grid;
+    gap: 7px;
+    padding: 12px 13px;
+    border-radius: var(--radius-sm);
+    background: var(--danger-quiet);
+    font-size: 12.5px;
+    color: var(--danger);
+  }
+  .displaced .why {
+    color: var(--text-2);
+  }
+  .displaced .btn {
+    margin-top: 3px;
   }
 
   .error {

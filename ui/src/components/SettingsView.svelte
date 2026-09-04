@@ -207,6 +207,27 @@
       </section>
 
       <section>
+        <h3>Interface scale</h3>
+        <p class="hint">Everything larger or smaller together, in steps of ten.</p>
+        <div class="slots">
+          <input
+            type="range"
+            min="50"
+            max="200"
+            step="10"
+            value={settings.uiScale}
+            onchange={(event) => update({ uiScale: Number(event.currentTarget.value) })}
+            oninput={(event) => {
+              // Follows the drag so the size can be judged while choosing it;
+              // the write waits for the drag to end.
+              document.documentElement.style.zoom = `${event.currentTarget.value}%`;
+            }}
+          />
+          <span class="num value">{settings.uiScale}%</span>
+        </div>
+      </section>
+
+      <section>
         <h3>Proxy</h3>
         <p class="hint">
           Sends the server connection and every outbound peer connection through

@@ -51,6 +51,12 @@
     // it, so the cleanup awaits the same promise rather than racing it.
     const subscription = onEvent((event) => {
       app.apply(event);
+      // Rooms are rejoined on sign-in because the server remembers none
+      // between sessions: without this the remembered list would sit there
+      // named but silent.
+      if (event.type === "connected") {
+        for (const room of app.settings?.rooms ?? []) void core.joinRoom(room);
+      }
       // A finished transfer is the one thing that changes what is on disk
       // while the app is running, so it is the only thing that re-reads it.
       if (event.type === "transferUpdated" && event.data.state.type === "completed") {
@@ -72,6 +78,15 @@
       app.downloaded = new Set();
     }
   }
+
+  // Applied to the document rather than passed down: every size in this
+  // interface is in px, so scaling has to happen above all of them. `zoom`
+  // reflows rather than transforming, which keeps text crisp and hit areas
+  // where they look.
+  $effect(() => {
+    const scale = app.settings?.uiScale ?? 100;
+    document.documentElement.style.zoom = `${scale}%`;
+  });
 
   function onKey(event: KeyboardEvent) {
     // Cmd/Ctrl-K opens the palette from anywhere, the way Arc's command bar

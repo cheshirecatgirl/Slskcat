@@ -58,6 +58,11 @@ pub struct Settings {
     /// look like the other.
     pub proxy: Option<Proxy>,
     pub search_timeout_secs: u64,
+    /// Interface scale as a percentage. 100 is the designed size.
+    pub ui_scale: u32,
+    /// Rooms to rejoin on sign-in, so the list is there before the server
+    /// answers. The server remembers nothing between sessions.
+    pub rooms: Vec<String>,
     /// People kept across sessions, in the order they were added.
     ///
     /// The network has no friends list of its own — there is no server message
@@ -95,6 +100,8 @@ impl Default for Settings {
             download_slots: config.download_slots,
             proxy: None,
             search_timeout_secs: config.search_timeout.as_secs(),
+            ui_scale: 100,
+            rooms: Vec::new(),
             friends: Vec::new(),
             accounts: Vec::new(),
             wishlist: Vec::new(),
