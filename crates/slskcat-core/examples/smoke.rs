@@ -1,7 +1,7 @@
 //! A live check against the real Soulseek network.
 //!
-//! Nothing else in this repository touches the network — every test is
-//! offline — so this is the only thing that can tell you whether the protocol
+//! Nothing else in this repository touches the network, every test is
+//! offline, so this is the only thing that can tell you whether the protocol
 //! integration actually works. It drives the same [`Engine`] and
 //! [`LiveBackend`] the application does, so a pass here means the core works,
 //! not merely that the library does.

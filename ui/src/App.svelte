@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { core, onEvent } from "./lib/core";
-  import { app, AppState, fire} from "./lib/state.svelte";
+  import { app, AppState, fire } from "./lib/state.svelte";
+  import * as session from "./lib/session";
   import type { Section } from "./lib/nav";
   import Sidebar from "./components/Sidebar.svelte";
   import Notices from "./components/Notices.svelte";
@@ -32,17 +33,9 @@
         // they already made, and the form they would be confirming is one
         // they cannot usefully change — it is already filled in.
         if (!loaded.rememberPassword || !loaded.username || !loaded.password) return;
-        app.connecting = true;
-        app.resuming = true;
-        try {
-          app.settings = await core.connect(loaded);
-        } catch (error) {
-          // Falls through to the form with the reason on it, which is the
-          // same place a failed manual sign-in lands.
-          app.connecting = false;
-          app.resuming = false;
-          app.loginError = String(error);
-        }
+        // A refusal falls through to the form with the reason on it, which is
+        // where a failed manual sign-in lands too.
+        await session.signIn(loaded, "connecting");
       })
       .catch((error) => {
         app.settingsError = String(error);
@@ -59,13 +52,13 @@
       // between sessions: without this the remembered list would sit there
       // named but silent.
       if (event.type === "connected") {
-        // Recorded here rather than on save: an account only belongs in the
-        // switcher once the server has accepted it, or a mistyped name is
-        // offered forever as somewhere to switch to.
-        const who = event.data.username;
+        // Recorded on the event rather than on save, so a name that was only
+        // mistyped into the form never reaches the switcher.
         void core
-          .rememberAccount(who)
+          .rememberAccount(event.data.username)
           .then((saved) => (app.settings = saved))
+          // The session is up either way, so a switcher entry that could not
+          // be written is not worth interrupting anyone over.
           .catch(() => {});
         for (const room of app.settings?.rooms ?? []) fire(core.joinRoom(room));
       }

@@ -347,10 +347,9 @@ button {
   box-shadow: 0 0 0 3px var(--accent-quiet);
 }
 
-/* A select drawn by the platform is a different control on every platform, and
-   WebKitGTK's is the outlier. Drawing the chevron here means every dropdown in
-   the app is the same shape — including the one that is a menu pretending to
-   be a select. */
+/* A select drawn by the platform is a different control on every platform,
+   and WebKitGTK's is the odd one. Drawing the chevron here gives every
+   dropdown in the app the same shape on all three. */
 select.field {
   appearance: none;
   padding-right: 27px;

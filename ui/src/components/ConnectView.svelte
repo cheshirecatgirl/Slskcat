@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
   import * as session from "../lib/session";
   import { defaultSettings } from "../lib/types";
@@ -35,16 +34,7 @@
 
   /** Take the account back. The server gives it to whoever logged in last. */
   async function resume() {
-    const stored = app.settings;
-    if (!stored) return;
-    app.connecting = true;
-    app.loginError = null;
-    try {
-      app.settings = await core.connect(stored);
-    } catch (error) {
-      app.connecting = false;
-      app.loginError = String(error);
-    }
+    if (app.settings) await session.signIn(app.settings);
   }
 
   /**
@@ -83,153 +73,142 @@
     event.preventDefault();
     if (!canSubmit) return;
 
-    app.connecting = true;
-    app.loginError = null;
+    // The backend persists what it was given, so the stored settings always
+    // describe a configuration that was actually used to sign in.
+    const saved = await session.signIn({
+      ...(app.settings ?? defaultSettings()),
+      username: username.trim(),
+      password,
+      rememberPassword: remember,
+    });
 
-    try {
-      // The backend persists what it was given, so the stored settings always
-      // describe a configuration that was actually used to sign in.
-      const saved = await core.connect({
-        ...(app.settings ?? defaultSettings()),
-        username: username.trim(),
-        password,
-        rememberPassword: remember,
-      });
-      app.settings = saved;
-
-      if (remember && !saved.keychainAvailable) {
-        app.notify("Signed in. Password not saved: no keychain available.");
-      }
-    } catch (error) {
-      app.connecting = false;
-      app.loginError = String(error);
+    if (saved && remember && !saved.keychainAvailable) {
+      app.notify("Signed in. Password not saved: no keychain available.");
     }
   }
 </script>
 
+<!-- One mark, rendered in both branches: the wait and the form are the same
+     screen a moment apart. -->
+{#snippet mark()}
+  <div class="mark" aria-hidden="true">
+    <!-- A cat, drawn rather than fetched: two ears, two eyes, a nose. -->
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4.6 3.2a1 1 0 0 1 1.3-.1L9.2 5.6a9.6 9.6 0 0 1 5.6 0l3.3-2.5a1 1 0 0 1 1.6.9l-.5 4.4a8 8 0 0 1 1 3.8c0 4.6-3.9 8-8.2 8s-8.2-3.4-8.2-8a8 8 0 0 1 1-3.8l-.5-4.4a1 1 0 0 1 .3-.8Zm2 2.6.3 2.6-.4.6a6 6 0 0 0-.8 3c0 3.4 2.9 6 6.3 6s6.3-2.6 6.3-6a6 6 0 0 0-.8-3l-.4-.6.3-2.6-1.8 1.4-.6-.2a7.7 7.7 0 0 0-5.4 0l-.6.2-1.8-1.4ZM9.4 11a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Zm5.2 0a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 14.6c.6 0 1.1.3 1.1.7 0 .5-.5.9-1.1.9s-1.1-.4-1.1-.9c0-.4.5-.7 1.1-.7Z"
+      />
+    </svg>
+  </div>
+{/snippet}
+
 <div class="wrap">
-  {#if app.resuming && !app.loginError}
-    <!-- Signing in without a form: with a remembered password there is
-         nothing to fill in, and flashing an unusable form for the length of a
-         handshake reads as a glitch. -->
+  {#if app.waiting && !app.loginError}
+    <!-- Signing in with a remembered password leaves nothing to fill in, so
+         the form would be unusable for the length of the handshake. -->
     <div class="waiting">
-      <div class="mark" aria-hidden="true">
-        <!-- A cat, drawn rather than fetched: two ears, two eyes, a nose. -->
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M4.6 3.2a1 1 0 0 1 1.3-.1L9.2 5.6a9.6 9.6 0 0 1 5.6 0l3.3-2.5a1 1 0 0 1 1.6.9l-.5 4.4a8 8 0 0 1 1 3.8c0 4.6-3.9 8-8.2 8s-8.2-3.4-8.2-8a8 8 0 0 1 1-3.8l-.5-4.4a1 1 0 0 1 .3-.8Zm2 2.6.3 2.6-.4.6a6 6 0 0 0-.8 3c0 3.4 2.9 6 6.3 6s6.3-2.6 6.3-6a6 6 0 0 0-.8-3l-.4-.6.3-2.6-1.8 1.4-.6-.2a7.7 7.7 0 0 0-5.4 0l-.6.2-1.8-1.4ZM9.4 11a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Zm5.2 0a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 14.6c.6 0 1.1.3 1.1.7 0 .5-.5.9-1.1.9s-1.1-.4-1.1-.9c0-.4.5-.7 1.1-.7Z"
-        />
-      </svg>
-      </div>
+      {@render mark()}
       <p>
-        {app.reconnecting ? "Reconnecting" : "Connecting"} as
+        {app.waiting === "reconnecting" ? "Reconnecting" : "Connecting"} as
         <strong>{app.settings?.username ?? ""}</strong>…
       </p>
     </div>
   {:else}
-  <form onsubmit={submit}>
-    <div class="mark" aria-hidden="true">
-      <!-- A cat, drawn rather than fetched: two ears, two eyes, a nose. -->
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M4.6 3.2a1 1 0 0 1 1.3-.1L9.2 5.6a9.6 9.6 0 0 1 5.6 0l3.3-2.5a1 1 0 0 1 1.6.9l-.5 4.4a8 8 0 0 1 1 3.8c0 4.6-3.9 8-8.2 8s-8.2-3.4-8.2-8a8 8 0 0 1 1-3.8l-.5-4.4a1 1 0 0 1 .3-.8Zm2 2.6.3 2.6-.4.6a6 6 0 0 0-.8 3c0 3.4 2.9 6 6.3 6s6.3-2.6 6.3-6a6 6 0 0 0-.8-3l-.4-.6.3-2.6-1.8 1.4-.6-.2a7.7 7.7 0 0 0-5.4 0l-.6.2-1.8-1.4ZM9.4 11a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Zm5.2 0a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 14.6c.6 0 1.1.3 1.1.7 0 .5-.5.9-1.1.9s-1.1-.4-1.1-.9c0-.4.5-.7 1.1-.7Z"
-        />
-      </svg>
-    </div>
-    <h1>{app.addingAccount ? "Add an account" : "Sign in"}</h1>
+    <form onsubmit={submit}>
+      {@render mark()}
+      <h1>{app.addingAccount ? "Add an account" : "Sign in"}</h1>
 
-    {#if app.displaced}
-      <!-- Not a failure: the password was right and the server simply handed
-           the name to a newer session. One button is the whole remedy. -->
-      <div class="displaced" role="status">
-        <p>Your account was signed in somewhere else.</p>
-        <p class="why">The server allows one session per account, so this one was ended.</p>
-        <button class="btn primary" type="button" onclick={resume} disabled={!canResume}>
-          Go back online
-        </button>
-      </div>
-    {/if}
+      {#if app.displaced}
+        <!-- Not a failure: the password was right and the server handed the
+             name to a newer session. One button is the whole remedy. -->
+        <div class="displaced" role="status">
+          <p>Your account was signed in somewhere else.</p>
+          <p class="why">The server allows one session per account, so this one was ended.</p>
+          <button class="btn primary" type="button" onclick={resume} disabled={!canResume}>
+            Go back online
+          </button>
+        </div>
+      {/if}
 
-    <label>
-      <span>Username</span>
-      <input
-        class="field"
-        bind:value={username}
-        oninput={() => (touched = true)}
-        autocomplete="username"
-        spellcheck="false"
-        autocapitalize="off"
-        disabled={app.connecting}
-      />
-    </label>
-
-    <label>
-      <span>Password</span>
-      <div class="secret">
-        <!-- `type` is set rather than bound: Svelte refuses `bind:value` on an
-             input whose type is dynamic, and one input that changes type keeps
-             the caret, the selection and the password manager's grip on the
-             field, which swapping between two inputs would all drop. -->
+      <label>
+        <span>Username</span>
         <input
           class="field"
-          type={reveal ? "text" : "password"}
-          value={password}
-          oninput={(event) => {
-            password = event.currentTarget.value;
-            touched = true;
-          }}
-          autocomplete="current-password"
+          bind:value={username}
+          oninput={() => (touched = true)}
+          autocomplete="username"
+          spellcheck="false"
+          autocapitalize="off"
           disabled={app.connecting}
         />
-        <button
-          type="button"
-          class="peek"
-          onclick={() => (reveal = !reveal)}
-          disabled={app.connecting}
-          title={reveal ? "Hide password" : "Show password"}
-          aria-label={reveal ? "Hide password" : "Show password"}
-          aria-pressed={reveal}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            {#if reveal}
-              <path
-                d="M2.1 3.5 3.5 2.1l18.4 18.4-1.4 1.4-3.2-3.2A11 11 0 0 1 12 20c-5 0-9.3-3.1-11-8a12.7 12.7 0 0 1 4-5.4L2.1 3.5Zm4.3 4.3A10.7 10.7 0 0 0 3.2 12 10 10 0 0 0 12 18c1.3 0 2.6-.3 3.7-.8l-1.8-1.8a4 4 0 0 1-5.3-5.3L6.4 7.8ZM12 4c5 0 9.3 3.1 11 8a12.8 12.8 0 0 1-2.5 3.9l-1.4-1.4A10.8 10.8 0 0 0 20.8 12 10 10 0 0 0 12 6c-.5 0-1 0-1.5.1L8.9 4.5C9.9 4.2 10.9 4 12 4Z"
-              />
-            {:else}
-              <path
-                d="M12 4c5 0 9.3 3.1 11 8-1.7 4.9-6 8-11 8s-9.3-3.1-11-8c1.7-4.9 6-8 11-8Zm0 2a10 10 0 0 0-8.8 6 10 10 0 0 0 17.6 0A10 10 0 0 0 12 6Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
-              />
-            {/if}
-          </svg>
-        </button>
-      </div>
-    </label>
+      </label>
 
-    <label class="check">
-      <input type="checkbox" bind:checked={remember} disabled={app.connecting} />
-      <span>Remember password</span>
-    </label>
+      <label>
+        <span>Password</span>
+        <div class="secret">
+          <!-- `type` is set rather than bound: Svelte refuses `bind:value` on
+               an input whose type is dynamic, and one input that changes type
+               keeps the caret, the selection and the password manager's grip
+               on the field, all of which swapping between two inputs drops. -->
+          <input
+            class="field"
+            type={reveal ? "text" : "password"}
+            value={password}
+            oninput={(event) => {
+              password = event.currentTarget.value;
+              touched = true;
+            }}
+            autocomplete="current-password"
+            disabled={app.connecting}
+          />
+          <button
+            type="button"
+            class="peek"
+            onclick={() => (reveal = !reveal)}
+            disabled={app.connecting}
+            title={reveal ? "Hide password" : "Show password"}
+            aria-label={reveal ? "Hide password" : "Show password"}
+            aria-pressed={reveal}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {#if reveal}
+                <path
+                  d="M2.1 3.5 3.5 2.1l18.4 18.4-1.4 1.4-3.2-3.2A11 11 0 0 1 12 20c-5 0-9.3-3.1-11-8a12.7 12.7 0 0 1 4-5.4L2.1 3.5Zm4.3 4.3A10.7 10.7 0 0 0 3.2 12 10 10 0 0 0 12 18c1.3 0 2.6-.3 3.7-.8l-1.8-1.8a4 4 0 0 1-5.3-5.3L6.4 7.8ZM12 4c5 0 9.3 3.1 11 8a12.8 12.8 0 0 1-2.5 3.9l-1.4-1.4A10.8 10.8 0 0 0 20.8 12 10 10 0 0 0 12 6c-.5 0-1 0-1.5.1L8.9 4.5C9.9 4.2 10.9 4 12 4Z"
+                />
+              {:else}
+                <path
+                  d="M12 4c5 0 9.3 3.1 11 8-1.7 4.9-6 8-11 8s-9.3-3.1-11-8c1.7-4.9 6-8 11-8Zm0 2a10 10 0 0 0-8.8 6 10 10 0 0 0 17.6 0A10 10 0 0 0 12 6Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
+                />
+              {/if}
+            </svg>
+          </button>
+        </div>
+      </label>
 
-    {#if app.loginError}
-      <p class="error" role="alert">{app.loginError}</p>
-    {/if}
-    {#if app.settingsError}
-      <p class="error" role="alert">{app.settingsError}</p>
-    {/if}
+      <label class="check">
+        <input type="checkbox" bind:checked={remember} disabled={app.connecting} />
+        <span>Remember password</span>
+      </label>
 
-    <button class="btn primary" type="submit" disabled={!canSubmit}>
-      {app.connecting ? "Connecting…" : app.addingAccount ? "Add account" : "Sign in"}
-    </button>
+      {#if app.loginError}
+        <p class="error" role="alert">{app.loginError}</p>
+      {/if}
+      {#if app.settingsError}
+        <p class="error" role="alert">{app.settingsError}</p>
+      {/if}
 
-    {#if backTo}
-      <button class="back" type="button" onclick={back}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M11 4.6 4.3 11.3a1 1 0 0 0 0 1.4L11 19.4l1.4-1.4-4.3-4.3H20v-2H8.1l4.3-4.3L11 4.6Z" />
-        </svg>
-        Back to {backTo}
+      <button class="btn primary" type="submit" disabled={!canSubmit}>
+        {app.connecting ? "Connecting…" : app.addingAccount ? "Add account" : "Sign in"}
       </button>
-    {/if}
-  </form>
+
+      {#if backTo}
+        <button class="back" type="button" onclick={back}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 4.6 4.3 11.3a1 1 0 0 0 0 1.4L11 19.4l1.4-1.4-4.3-4.3H20v-2H8.1l4.3-4.3L11 4.6Z" />
+          </svg>
+          Back to {backTo}
+        </button>
+      {/if}
+    </form>
   {/if}
 </div>
 
@@ -271,8 +250,8 @@
     fill: #fff;
   }
 
-  /* Flush with the left edge of the fields above it: a way out reads as a
-     step back out of the form, not as another control inside it. */
+  /* Flush with the left edge of the fields above it, so it sits outside the
+     form rather than looking like one more control in it. */
   .back {
     display: flex;
     align-self: flex-start;

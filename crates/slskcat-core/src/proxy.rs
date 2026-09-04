@@ -11,7 +11,7 @@
 //!   makes also arrives here and is re-dialled through the proxy.
 //!
 //! Rewriting is possible without re-framing anything because the two fields
-//! that matter are fixed width — four bytes of IPv4 and four of port — so a
+//! that matter are fixed width, four bytes of IPv4 and four of port, so a
 //! patched message is exactly as long as the one it replaces.
 //!
 //! What this cannot do is accept connections, so a proxied session runs with
@@ -362,7 +362,7 @@ impl Drop for Relay {
     }
 }
 
-/// A relay ending is ordinary — a peer hung up, a transfer finished — so it is
+/// A relay ending is ordinary, a peer hung up or a transfer finished, so it is
 /// not surfaced as a warning. This exists to name that decision rather than
 /// leave a silently discarded error.
 fn log_relay_end(_error: &io::Error) {}
@@ -416,8 +416,8 @@ impl Shared {
 
     /// Replace the address in `body` if it is a message that carries one.
     ///
-    /// The patch is exactly as long as what it replaces — four bytes of IPv4
-    /// and four of port — so the framing this was read with still holds.
+    /// The patch is exactly as long as what it replaces, four bytes of IPv4
+    /// and four of port, so the framing this was read with still holds.
     fn patch_message(self: &Arc<Self>, body: &mut [u8]) {
         let Some(code) = body
             .get(..4)

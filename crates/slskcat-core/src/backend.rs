@@ -1,8 +1,8 @@
 //! The seam between the application and whatever actually speaks Soulseek.
 //!
 //! Everything above this trait deals only in [`Command`] and [`Event`]. That
-//! is what keeps the choice of protocol implementation — the in-process
-//! library today, conceivably a sidecar later — from leaking into the UI.
+//! is what keeps the choice of protocol implementation, the in-process
+//! library today and conceivably a sidecar later, from leaking into the UI.
 
 use crate::command::Command;
 use crate::event::Event;

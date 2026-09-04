@@ -22,8 +22,16 @@
 
 <!-- Lives outside every view, so playback survives moving between them. -->
 <div class="bar" class:showing={player.track !== null}>
+  <!-- `crossorigin` is what makes this audible at all. Files come from the
+       asset protocol, which is a different origin from the page, and a Web
+       Audio graph fed by a cross-origin element it could not read with CORS
+       outputs silence — the track plays, the clock runs, nothing comes out.
+       The asset protocol answers with the page's own origin, so asking for
+       CORS is all it takes. It has to be set before `src` is, which is why it
+       is here rather than in `attach`. -->
   <audio
     bind:this={audio}
+    crossorigin="anonymous"
     ontimeupdate={() => (player.position = audio?.currentTime ?? 0)}
     onloadedmetadata={() => (player.duration = audio?.duration ?? 0)}
     onended={() => (player.playing = false)}
@@ -111,14 +119,16 @@
             max="12"
             step="0.5"
             value={player.pitch}
-            disabled={!player.pitchAvailable}
+            disabled={!player.pitchAvailable || !player.effectsAvailable}
             oninput={(event) => (player.pitch = Number(event.currentTarget.value))}
           />
         </label>
         <p class="note">
-          {player.pitchAvailable
-            ? "Semitones, independent of speed. Both move while the track plays."
-            : "Pitch needs an audio worklet, which this platform does not provide."}
+          {!player.effectsAvailable
+            ? "Effects are unavailable here, so this is plain playback."
+            : player.pitchAvailable
+              ? "Semitones, independent of speed. Both move while the track plays."
+              : "Pitch needs an audio worklet, which this platform does not provide."}
         </p>
 
         <label>
@@ -129,6 +139,7 @@
             max="1"
             step="0.01"
             value={player.reverb}
+            disabled={!player.effectsAvailable}
             oninput={(event) => (player.reverb = Number(event.currentTarget.value))}
           />
         </label>
@@ -155,8 +166,8 @@
     align-items: center;
     gap: 10px;
     grid-column: 1 / -1;
-    /* The window has no left padding — the sidebar sits flush against the
-       edge — so the bar supplies its own. */
+    /* The window has no left padding, since the sidebar sits flush against
+       the edge, so the bar supplies its own. */
     margin: var(--gap) 0 0 var(--gap);
     padding: 8px 12px;
     border-radius: var(--radius);

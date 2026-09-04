@@ -2,8 +2,8 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
-  import { blankProxy, type Proxy } from "../lib/types";
-  import type { Settings } from "../lib/types";
+  import * as session from "../lib/session";
+  import { blankProxy, type Proxy, type Settings } from "../lib/types";
 
   const settings = $derived(app.settings);
 
@@ -31,19 +31,12 @@
       // be moved onto a different route after the fact. So the session is
       // rebuilt: signing in again is the only thing "apply now" can mean, and
       // doing it here is better than leaving it for the user to discover.
+      // The wait rather than the form: there is nothing to fill in, and the
+      // old session drops partway through.
       if (change.proxy !== undefined && app.connected) {
-        app.connecting = true;
-        // The wait, not the form: there is nothing to fill in, and the old
-        // session drops partway through. `reconnecting` is what makes the
-        // wait say so.
-        app.reconnecting = true;
-        app.resuming = true;
-        app.settings = await core.connect(next);
+        await session.signIn(next, "reconnecting");
       }
     } catch (error) {
-      app.connecting = false;
-      app.reconnecting = false;
-      app.resuming = false;
       app.notify(String(error), "danger");
     }
   }

@@ -1,25 +1,24 @@
 /**
  * A real-time pitch shifter, as an audio worklet.
  *
- * An audio element gives you tempo for free — `playbackRate` with
- * `preservesPitch` on is a time-stretcher the browser already ships. It gives
- * you no way to move the pitch without the tempo, so that half is here.
+ * An audio element gives you tempo for free: `playbackRate` with
+ * `preservesPitch` on is a time-stretcher the browser already ships. It offers
+ * no way to move pitch without tempo, so that half is here.
  *
- * The method is the classic two-tap crossfading delay. Input goes into a ring
- * buffer; two read pointers chase the write pointer half a grain apart, both
+ * The method is the two-tap crossfading delay. Input goes into a ring buffer,
+ * and two read pointers chase the write pointer half a grain apart, both
  * advancing at the pitch ratio rather than at 1. Reading faster than you write
- * raises the pitch, and the drift that would otherwise run the pointer into
- * the writer is absorbed by wrapping it once per grain — the wrap is a
- * discontinuity, which is why there are two of them, crossfaded so that one is
- * always at full gain while the other is silent through its jump.
+ * raises the pitch; the drift that would otherwise run a pointer into the
+ * writer is absorbed by wrapping it once per grain. Each wrap is a
+ * discontinuity, so there are two pointers, crossfaded, and whichever one is
+ * jumping is silent while it does.
  *
  * `sin² + cos² = 1`, so the pair sums to unity gain at every phase and the
  * output does not pump.
  *
- * It smears transients, as every granular shifter does. That is the honest
- * trade for something that runs live on one thread and needs no library: the
- * alternative is a phase vocoder, which is an order of magnitude more code and
- * still smears, differently.
+ * Every granular shifter smears transients and this one is no exception. The
+ * alternative is a phase vocoder: far more code, still smearing, and more
+ * than this needs.
  */
 
 /** Grain length in samples. Short enough not to slap back, long enough not to warble. */

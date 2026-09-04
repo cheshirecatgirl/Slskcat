@@ -171,7 +171,7 @@ describe("everyone seen", () => {
 
 describe("sessions ending", () => {
   it("tells being displaced apart from a bad password", () => {
-    // One is not a failure to fix — the credentials were right — and the way
+    // One is not a failure to fix, the credentials were right, and the way
     // back is a button rather than a form.
     const app = new AppState();
     app.apply({ type: "disconnected", data: { type: "loggedInElsewhere" } });
@@ -186,19 +186,13 @@ describe("sessions ending", () => {
   it("clears every in-flight flag when a session begins", () => {
     const app = new AppState();
     app.connecting = true;
-    app.resuming = true;
-    app.reconnecting = true;
+    app.waiting = "reconnecting";
     app.displaced = true;
     app.addingAccount = true;
     app.previousAccount = "someone";
     app.apply({ type: "connected", data: { username: "listener" } });
-    expect([
-      app.connecting,
-      app.resuming,
-      app.reconnecting,
-      app.displaced,
-      app.addingAccount,
-    ]).toEqual([false, false, false, false, false]);
+    expect([app.connecting, app.displaced, app.addingAccount]).toEqual([false, false, false]);
+    expect(app.waiting).toBeNull();
     expect(app.previousAccount).toBeNull();
   });
 
@@ -207,14 +201,13 @@ describe("sessions ending", () => {
     // through. Letting that clear the wait put the sign-in form on screen for
     // the length of a handshake, which is the flicker this exists to stop.
     const app = new AppState();
-    app.resuming = true;
-    app.reconnecting = true;
+    app.waiting = "reconnecting";
     app.apply({ type: "disconnected", data: { type: "requested" } });
-    expect(app.resuming).toBe(true);
+    expect(app.waiting).toBe("reconnecting");
 
     // A disconnect that no reconnect asked for still ends the wait.
-    app.reconnecting = false;
+    app.waiting = "connecting";
     app.apply({ type: "disconnected", data: { type: "requested" } });
-    expect(app.resuming).toBe(false);
+    expect(app.waiting).toBeNull();
   });
 });

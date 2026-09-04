@@ -24,6 +24,8 @@ close most of that gap** — that is the job.
   bundle carried no frontend; the command works, the artefact needs remeasuring.
 - Every screen, both colour schemes, in **headless Chromium** via
   `ui/tools/screenshots.mjs`.
+- The shifter's output and the CORS trap that silences it, via
+  `ui/tools/audio-check.mjs`. Chromium, not WebKitGTK.
 - `cargo audit` and `pnpm audit` — zero vulnerabilities.
 
 ## What has never run
@@ -76,8 +78,26 @@ says nothing about WebKitGTK.
 ```bash
 pnpm --dir ui build
 python3 -m http.server 8899 -d ui/dist &
-node ui/tools/screenshots.mjs ../docs
+node ui/tools/screenshots.mjs docs
 ```
+
+Playwright is a dev dependency, so `pnpm --dir ui install` is the whole setup.
+Where the browser binaries are already on the machine, point at one with
+`CHROMIUM_PATH=/path/to/chrome` rather than downloading another.
+
+## Verifying audio
+
+`ui/tools/audio-check.mjs` renders tones through the shifter and through a
+media element in headless Chromium, and measures what comes out. It starts its
+own servers and needs no arguments:
+
+```bash
+node ui/tools/audio-check.mjs
+```
+
+Silence is the failure that looks like success here — the track plays, the
+clock runs, nothing is heard — so it is worth running after any change to
+`player.svelte.ts`, `pitch-worklet.js`, or how files reach the element.
 
 ## Things that look like bugs and are not
 

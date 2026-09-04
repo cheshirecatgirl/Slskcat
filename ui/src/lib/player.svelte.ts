@@ -3,20 +3,18 @@
  *
  * One `<audio>` element feeding a Web Audio graph:
  *
- *   element → dry ─────────────┐
- *           → wet → convolver ─┴→ output → speakers
+ *   element → shifter → dry ─────────────┐
+ *                     → wet → convolver ─┴→ output → speakers
  *
- * The element does the decoding and the seeking, which is what keeps this
- * light: no decoding of whole files into memory, no dependency, and a four
- * hundred megabyte FLAC costs the same as a three minute one.
+ * The element does the decoding and the seeking, which keeps this light: no
+ * decoding of whole files into memory, no dependency, and a four hundred
+ * megabyte FLAC costs the same as a three minute one.
  *
- * Speed and pitch are independent, and both move while the track plays.
- *
- * They come from opposite ends. Tempo is the element's own: `playbackRate`
- * with `preservesPitch` on is a time-stretcher the browser already ships, and
- * it is better than anything worth writing here. Pitch it will not give you at
- * all, so that half is a worklet — a granular shifter sitting between the
- * source and the effects.
+ * Speed and pitch are independent, and both move while the track plays, but
+ * they come from different places. Tempo is the element's own `playbackRate`
+ * with `preservesPitch` on — a time-stretcher the browser already ships, and a
+ * better one than is worth writing here. For pitch it offers nothing, so that
+ * half is the worklet sitting between the source and the effects.
  */
 
 import shifterUrl from "./pitch-worklet.js?url";
@@ -62,12 +60,25 @@ export class Player {
    * that does nothing.
    */
   pitchAvailable = $state(true);
+  /**
+   * False where the graph could not be built at all, which leaves the element
+   * playing on its own: sound, but no speed-independent pitch and no reverb.
+   */
+  effectsAvailable = $state(true);
 
   #audio: HTMLAudioElement | null = null;
   #context: AudioContext | null = null;
   #dry: GainNode | null = null;
   #wet: GainNode | null = null;
   #shifter: AudioWorkletNode | null = null;
+  /**
+   * Whether the graph has been attempted.
+   *
+   * `createMediaElementSource` can only be called once per element, and it
+   * takes the element's output away from the speakers, so a second attempt
+   * after a half-built graph throws and leaves the track silent.
+   */
+  #built = false;
 
   /** Attach to the element once it exists. */
   attach(audio: HTMLAudioElement) {
@@ -82,36 +93,48 @@ export class Player {
    * gesture, and building one at load leaves it suspended and silent.
    */
   async #graph() {
-    if (this.#context || !this.#audio) return;
+    if (this.#built || !this.#audio) return;
+    this.#built = true;
+
     const context = new AudioContext();
     const source = context.createMediaElementSource(this.#audio);
-
-    // The shifter is optional: if the platform has no worklet, everything
-    // downstream of it still works and only pitch is lost.
-    let head: AudioNode = source;
     try {
-      await context.audioWorklet.addModule(shifterUrl);
-      const shifter = new AudioWorkletNode(context, "pitch-shifter", {
-        outputChannelCount: [2],
-      });
-      source.connect(shifter);
-      head = shifter;
-      this.#shifter = shifter;
+      // The shifter is optional: without a worklet everything downstream of
+      // it still works and only pitch is lost.
+      let head: AudioNode = source;
+      try {
+        await context.audioWorklet.addModule(shifterUrl);
+        const shifter = new AudioWorkletNode(context, "pitch-shifter", {
+          outputChannelCount: [2],
+        });
+        source.connect(shifter);
+        head = shifter;
+        this.#shifter = shifter;
+      } catch {
+        this.pitchAvailable = false;
+      }
+
+      const dry = context.createGain();
+      const wet = context.createGain();
+      const convolver = context.createConvolver();
+      convolver.buffer = impulse(context, REVERB_SECONDS);
+
+      head.connect(dry).connect(context.destination);
+      head.connect(wet).connect(convolver).connect(context.destination);
+
+      this.#context = context;
+      this.#dry = dry;
+      this.#wet = wet;
     } catch {
+      // The element's output belongs to the graph now whether the rest of it
+      // built or not, so send it to the speakers plainly. Losing the effects
+      // is recoverable; losing the sound is not.
+      source.disconnect();
+      source.connect(context.destination);
+      this.#context = context;
       this.pitchAvailable = false;
+      this.effectsAvailable = false;
     }
-
-    const dry = context.createGain();
-    const wet = context.createGain();
-    const convolver = context.createConvolver();
-    convolver.buffer = impulse(context, REVERB_SECONDS);
-
-    head.connect(dry).connect(context.destination);
-    head.connect(wet).connect(convolver).connect(context.destination);
-
-    this.#context = context;
-    this.#dry = dry;
-    this.#wet = wet;
   }
 
   async play(track: Track) {

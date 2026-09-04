@@ -140,7 +140,7 @@ impl LiveBackend {
             self.disconnect(Disconnect::Requested, out);
         }
 
-        // Whatever assembled this config — a form, a settings file — may have
+        // Whatever assembled this config, a form or a settings file, may have
         // left the download directory blank. Downloads must never be written
         // to an empty path, so it is repaired before anything uses it.
         let mut config = config.normalized();
@@ -205,11 +205,11 @@ impl LiveBackend {
         match client.login() {
             Ok(true) => {}
             // The same verdict arriving by two routes. The server does say
-            // which of the two it is — the login response carries `INVALIDPASS`
-            // or `INVALIDUSERNAME` after the success flag — but the library
-            // returns as soon as it reads the flag and never reads the string,
-            // so the distinction is gone before it reaches us. Naming both
-            // causes is the best we can do without forking the library.
+            // which of the two it is, since the login response carries
+            // `INVALIDPASS` or `INVALIDUSERNAME` after the success flag, but
+            // the library returns as soon as it reads the flag and never reads
+            // the string, so the distinction is gone before it reaches us.
+            // Naming both causes is the best we can do without forking it.
             Ok(false) | Err(SoulseekRs::AuthenticationFailed) => {
                 out.emit(Event::LoginFailed {
                     reason: REJECTED.into(),
@@ -248,8 +248,8 @@ impl LiveBackend {
     fn disconnect(&mut self, reason: Disconnect, out: &EventSink) {
         self.stop_all_searches();
         self.transfers.clear();
-        // Written before the queues are dropped, so a session that ends —
-        // cleanly or not — leaves behind what it was in the middle of.
+        // Written before the queues are dropped, so a session that ends,
+        // cleanly or not, leaves behind what it was in the middle of.
         self.persist();
         self.waiting.clear();
         self.held.clear();

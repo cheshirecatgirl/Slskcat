@@ -3,13 +3,13 @@
  * interface can be looked at — and regressions caught — without a desktop
  * session. This is how the app is reviewed in headless environments.
  *
- * Usage:
+ * Usage, from `ui/`:
  *   pnpm build
- *   npx serve dist -l 8899        # or: python3 -m http.server 8899 -d dist
+ *   python3 -m http.server 8899 -d dist &
  *   node tools/screenshots.mjs ../docs
  *
- * Playwright is not a dependency of this project; install it on demand:
- *   pnpm dlx playwright@latest
+ * Playwright is a dev dependency, so `pnpm install` is the whole setup. Set
+ * CHROMIUM_PATH to use a browser that is already on the machine.
  */
 import { chromium } from "playwright";
 
@@ -175,12 +175,12 @@ const run = async () => {
         window.__emit({ type: "searchHits", data: { id: 1, hits: [a, b, c] } });
       },
       [
-        hitData("velvet_hare", "Aphex Twin - Selected Ambient Works 85-92", 6, 2, 1_240_000),
+        hit("velvet_hare", "Aphex Twin - Selected Ambient Works 85-92", 6, 2, 1_240_000),
         // One rip in a different format, because that is what the network
         // actually returns — and it is what gives the format filter something
         // to filter.
-        hitData("nightporter", "Aphex Twin - Richard D James Album", 5, 0, 480_000, "mp3"),
-        hitData("cassette_ghost", "Aphex Twin - Windowlicker EP", 4, 1, 2_100_000),
+        hit("nightporter", "Aphex Twin - Richard D James Album", 5, 0, 480_000, "mp3"),
+        hit("cassette_ghost", "Aphex Twin - Windowlicker EP", 4, 1, 2_100_000),
       ],
     );
     await page.waitForTimeout(400);
@@ -452,11 +452,6 @@ const run = async () => {
 
   await browser.close();
 };
-
-// Injected into the page scope by name, so it must be declared as a global.
-function hitData(username, album, n, slots, speed, ext) {
-  return hit(username, album, n, slots, speed, ext);
-}
 
 await run();
 console.log("screenshots written");

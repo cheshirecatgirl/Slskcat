@@ -186,6 +186,8 @@ so far. Everything else compiles but has never been packaged.
 - `cargo tauri build --bundles deb` — a 2.0 MB package that installs
   `/usr/bin/slskcat`
 - Every screen, in both colour schemes, in headless Chromium
+- The pitch shifter's output, and that a media element needs `crossorigin` to
+  be audible through a Web Audio graph (`node ui/tools/audio-check.mjs`)
 - `cargo audit` and `pnpm audit` — zero vulnerabilities
 
 ## Known, expected, not worth reporting

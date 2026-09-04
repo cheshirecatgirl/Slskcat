@@ -4,8 +4,8 @@
 //!
 //! - everything ordinary goes to `settings.json` in the platform config
 //!   directory;
-//! - the password goes to the OS credential store — Keychain, Credential
-//!   Manager, or the D-Bus Secret Service — and never to disk in the clear.
+//! - the password goes to the OS credential store (Keychain, Credential
+//!   Manager, or the D-Bus Secret Service) and never to disk in the clear.
 //!
 //! The credential store can be genuinely unavailable (a headless Linux box
 //! with no session keyring is the usual case), so every call through it
@@ -39,7 +39,7 @@ pub struct Settings {
     /// It has to take part in serialisation. This struct is also the payload
     /// of the `connect` command, so `#[serde(skip)]` here did not just keep
     /// the password off disk: it dropped the typed password on the way into
-    /// Rust — every sign-in went out with an empty one — and omitted the field
+    /// Rust, so every sign-in went out with an empty one, and omitted the field
     /// on the way back, leaving the form bound to `undefined`. Keeping the
     /// secret off disk is the job of `for_disk`, which is the only place that
     /// writes the file.
@@ -65,8 +65,8 @@ pub struct Settings {
     pub rooms: Vec<String>,
     /// People kept across sessions, in the order they were added.
     ///
-    /// The network has no friends list of its own — there is no server message
-    /// for one — so this is entirely local, which also means it never tells
+    /// The network has no friends list of its own, and no server message
+    /// asks for one, so this is entirely local. That also means it never tells
     /// anyone who you are interested in.
     pub friends: Vec<String>,
     /// Every account this machine knows about, most recently used first.
@@ -281,9 +281,9 @@ pub fn load(app: &AppHandle) -> Result<Settings, String> {
 /// reached is reported through `keychain_available`, not as an error.
 pub fn save(app: &AppHandle, settings: &Settings) -> Result<Settings, String> {
     let settings = settings.clone();
-    // Deliberately not remembered here: saving happens on every settings
-    // change and on every sign-in attempt, successful or not. `remember` is
-    // called by the one caller that knows the account works.
+    // The account is deliberately not remembered here. Saving happens on
+    // every settings change and on every sign-in attempt, successful or not;
+    // `remember` is called by the one caller that knows it worked.
     let file = path(app)?;
     let text = serde_json::to_string_pretty(&settings.for_disk())
         .map_err(|error| format!("Could not encode settings: {error}"))?;
@@ -315,7 +315,7 @@ pub fn remember(app: &AppHandle, username: &str) -> Result<Settings, String> {
 
 /// Switch the stored settings to another known account.
 ///
-/// Everything that is a preference — shared directories, slots, wishlist —
+/// Everything that is a preference, shared directories and slots and wishlist,
 /// belongs to the machine rather than the account and stays as it is. Only the
 /// identity changes, and the password comes from the credential store under
 /// the new name.

@@ -49,7 +49,7 @@
    */
   const others = $derived.by(() => {
     const needle = newPeer.trim().toLowerCase();
-    // Anyone already listed above — a friend, or someone with an open thread —
+    // Anyone already listed above, a friend or someone with an open thread,
     // is not listed again here.
     const listed = new Set([...(app.settings?.friends ?? []), ...peers]);
     const all = app.knownUsers.filter((name) => !listed.has(name));
@@ -102,8 +102,9 @@
   /**
    * Open a room, joining it if it is not joined already.
    *
-   * Joining is how the network works — a room sends nothing to anyone who has
-   * not joined it — so a click has to do it. What a click must not do is leave
+   * Joining is how the network works, since a room sends nothing to anyone
+   * who has not joined it, so a click has to do it. What a click must not do is
+   * leave
    * the pane blank while the server thinks about it: `joining` marks the room
    * from the moment it is asked for, and the header says so until the join
    * comes back.

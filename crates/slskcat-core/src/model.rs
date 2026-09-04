@@ -327,8 +327,8 @@ pub struct Config {
     pub proxy: Option<crate::proxy::Proxy>,
     /// Where to remember transfers between runs, or `None` not to.
     ///
-    /// The core cannot work this path out for itself — it belongs to whatever
-    /// is hosting it — so it is given one or does without.
+    /// The core cannot work this path out for itself, since it belongs to
+    /// whatever is hosting it, so it is given one or does without.
     pub state_file: Option<PathBuf>,
 }
 

@@ -1,6 +1,6 @@
 //! What is already in the download folder.
 //!
-//! Search results carry no hash — the protocol has no field for one — so
+//! Search results carry no hash, the protocol has no field for one, so
 //! "already have this" cannot be answered by content. Name and size is what
 //! every other client uses and what this uses: an exact filename, extension
 //! included, and an exact byte count. Two different files agreeing on both is

@@ -801,14 +801,12 @@
     }
   }
 
-  /* The format menu stays open while formats are ticked, which a `select`
-     cannot do — it closes on every choice. */
   .picker {
     position: relative;
     flex: none;
   }
-  /* Spaced to land the chevron exactly where a select's does, so the two
-     controls beside it do not read as a different kind of thing. */
+  /* Spaced to land the chevron exactly where a select's does, so it matches
+     the two controls beside it. */
   .picker > .field {
     display: flex;
     align-items: center;

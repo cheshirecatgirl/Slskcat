@@ -110,9 +110,9 @@ export interface Config {
 /**
  * Persisted preferences, as `slskcat_app::settings::Settings`.
  *
- * `password` is never written to the settings file — it round-trips through
- * the OS credential store — and `keychainAvailable` reports whether that
- * store could actually be reached.
+ * `password` is never written to the settings file. It round-trips through
+ * the OS credential store, and `keychainAvailable` reports whether that store
+ * could actually be reached.
  */
 export interface Settings {
   username: string;

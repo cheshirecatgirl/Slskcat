@@ -15,8 +15,9 @@
   /**
    * Formats worth handing to a player.
    *
-   * A library lists everything in the folder — cue sheets, logs, artwork —
-   * because it is a view of what is there. Only these get a play control.
+   * A library lists everything in the folder, cue sheets and logs and artwork
+   * included, because it is a view of what is there. Only these get a play
+   * control.
    */
   const PLAYABLE = new Set([
     "flac",

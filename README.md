@@ -221,6 +221,9 @@ python3 -m http.server 8899 -d dist &
 node tools/screenshots.mjs ../docs
 ```
 
+Set `CHROMIUM_PATH` to use a browser that is already installed instead of
+letting Playwright download its own.
+
 ## Not done yet
 
 - **Never run against the live network.** Every test here is offline, and this
