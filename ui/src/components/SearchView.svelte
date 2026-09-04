@@ -1,7 +1,17 @@
 <script lang="ts">
   import { core } from "../lib/core";
   import { app, AppState, isLiveTransfer, type ResultRow } from "../lib/state.svelte";
-  import { bitrate, bytes, duration, fileName, format, parentPath, rate, tailPath } from "../lib/format";
+  import {
+    bitrate,
+    bytes,
+    duration,
+    fileName,
+    format,
+    FORMAT_GROUPS,
+    parentPath,
+    rate,
+    tailPath,
+  } from "../lib/format";
 
   let query = $state("");
   let filter = $state("");
@@ -26,13 +36,24 @@
 
   const search = $derived(app.search);
 
+  /**
+   * The formats present, under the headings they belong to.
+   *
+   * A flat list of twenty extensions is a list to read; six headings with two
+   * or three under each is a list to glance at. Only groups with something in
+   * them appear, so the menu describes these results rather than the set of
+   * formats that exist.
+   */
   const formats = $derived.by(() => {
     const seen = new Set<string>();
     for (const row of search?.rows ?? []) {
       const kind = format(row.path);
       if (kind) seen.add(kind);
     }
-    return [...seen].sort();
+    return FORMAT_GROUPS.map((group) => ({
+      label: group.label,
+      formats: group.formats.filter((kind) => seen.has(kind)),
+    })).filter((group) => group.formats.length > 0);
   });
 
   const rows = $derived.by(() => {
@@ -312,8 +333,12 @@
       <input class="field slim" bind:value={filter} placeholder="Filter these results…" />
       <select class="field slim auto" bind:value={chosen}>
         <option value="any">Any format</option>
-        {#each formats as ext (ext)}
-          <option value={ext}>{ext.toUpperCase()}</option>
+        {#each formats as group (group.label)}
+          <optgroup label={group.label}>
+            {#each group.formats as ext (ext)}
+              <option value={ext}>{ext.toUpperCase()}</option>
+            {/each}
+          </optgroup>
         {/each}
       </select>
       <label class="check">
@@ -338,7 +363,7 @@
         {sortAsc ? "▲" : "▼"}
       </button>
       <span class="summary num">
-        {rows.length.toLocaleString()} of {search.rows.length.toLocaleString()}
+        <strong>{rows.length.toLocaleString()}</strong> of {search.rows.length.toLocaleString()}
         {#if search.running}<span class="running">· searching…</span>{/if}
       </span>
       {#if search.running}
@@ -446,14 +471,16 @@
     background: var(--surface-2);
     font-weight: 500;
   }
+  /* Text scales with the row it sits in: a file is the baseline, a folder
+     groups files, a peer heads folders. Same ratios as the heights. */
   .tuser .uname {
-    font-size: 14px;
+    font-size: 18.75px;
   }
   .tfolder {
     height: 51px;
   }
   .tfolder .fold {
-    font-size: 13px;
+    font-size: 15.625px;
   }
   .tuser:hover {
     background: var(--surface-3);
@@ -488,7 +515,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
     color: var(--text-2);
   }
 
@@ -588,11 +614,17 @@
     padding: 15px 18px 0;
   }
 
+  /* A quarter of the pane. A field the width of the window invites a sentence;
+     a search on this network is two or three words, and the results below are
+     what the space is for. Clamped so it stays usable on a narrow window. */
   form {
     display: flex;
     align-items: center;
     gap: 8px;
     position: relative;
+    width: 25%;
+    min-width: 260px;
+    max-width: 460px;
   }
   form svg {
     position: absolute;

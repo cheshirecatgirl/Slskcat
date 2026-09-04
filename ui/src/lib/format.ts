@@ -77,18 +77,34 @@ export function extension(path: string): string {
  * with episode numbers and dates. Nothing here is guessed — a name whose tail
  * is not one of these has no format, and says so.
  */
-const FORMATS = new Set([
-  // lossless
-  "flac", "wav", "aiff", "aif", "alac", "ape", "wv", "dsf", "dff", "tak", "tta",
-  // lossy
-  "mp3", "m4a", "aac", "ogg", "oga", "opus", "wma", "mpc", "ac3", "dts",
-  // video
-  "mkv", "mp4", "m4v", "avi", "mov", "webm", "wmv", "flv", "mpg", "mpeg", "ts", "vob",
-  // things that travel with a rip
-  "cue", "log", "txt", "nfo", "sfv", "m3u", "m3u8", "pdf",
-  "jpg", "jpeg", "png", "gif", "webp",
-  "zip", "rar", "7z", "iso",
-]);
+export const FORMAT_GROUPS: { label: string; formats: readonly string[] }[] = [
+  {
+    label: "Lossless",
+    formats: ["flac", "wav", "aiff", "aif", "alac", "ape", "wv", "dsf", "dff", "tak", "tta"],
+  },
+  {
+    label: "Lossy",
+    formats: ["mp3", "m4a", "aac", "ogg", "oga", "opus", "wma", "mpc", "ac3", "dts"],
+  },
+  {
+    label: "Video",
+    formats: ["mkv", "mp4", "m4v", "avi", "mov", "webm", "wmv", "flv", "mpg", "mpeg", "ts", "vob"],
+  },
+  {
+    label: "Images",
+    formats: ["jpg", "jpeg", "png", "gif", "webp"],
+  },
+  {
+    label: "Archives",
+    formats: ["zip", "rar", "7z", "iso"],
+  },
+  {
+    label: "With the rip",
+    formats: ["cue", "log", "txt", "nfo", "sfv", "m3u", "m3u8", "pdf"],
+  },
+];
+
+const FORMATS = new Set(FORMAT_GROUPS.flatMap((group) => group.formats));
 
 /**
  * The file's format, or `""` when its name does not end in one.

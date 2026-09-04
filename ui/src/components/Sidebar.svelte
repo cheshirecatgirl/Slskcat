@@ -12,8 +12,15 @@
   let switching = $state(false);
 
   /** Accounts other than the one signed in — the only ones worth offering. */
+  /**
+   * Accounts other than the one signed in, most recent first, capped at five.
+   *
+   * A switcher is for the handful of names someone actually uses; past that it
+   * is a list to search rather than a menu to point at. The rest stay in the
+   * settings file and come back if one is signed into again.
+   */
   const others = $derived(
-    (app.settings?.accounts ?? []).filter((name) => name !== app.username),
+    (app.settings?.accounts ?? []).filter((name) => name !== app.username).slice(0, 5),
   );
 
   /**
@@ -33,12 +40,14 @@
       // the two sessions: with a remembered password there is nothing to fill
       // in, and a form shown for the length of a handshake reads as a flicker.
       app.connecting = next.password.length > 0;
+      app.resuming = app.connecting;
       await core.disconnect();
       if (next.password.length > 0) {
         app.settings = await core.connect(next);
       }
     } catch (error) {
       app.connecting = false;
+      app.resuming = false;
       app.notify(String(error), "danger");
     }
   }
@@ -51,14 +60,17 @@
     }
   }
 
-  /** Sign out to an empty form, which is where a new account is added. */
+  /**
+   * Show an empty sign-in form without ending the current session.
+   *
+   * Signing out to add an account made the form the only thing on screen with
+   * no way back: the account you already had was gone, so cancelling meant
+   * signing into it again. `addingAccount` leaves the session alone until a
+   * new one actually signs in.
+   */
   async function addAccount() {
     switching = false;
-    try {
-      await core.disconnect();
-    } catch (error) {
-      app.notify(String(error), "danger");
-    }
+    app.addingAccount = true;
   }
 
   // Inline SVG rather than an icon package: a handful of paths costs nothing
@@ -104,7 +116,9 @@
 
 <aside>
   <div class="brand">
-    <div class="mark" aria-hidden="true"></div>
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M4.6 3.2a1 1 0 0 1 1.3-.1L9.2 5.6a9.6 9.6 0 0 1 5.6 0l3.3-2.5a1 1 0 0 1 1.6.9l-.5 4.4a8 8 0 0 1 1 3.8c0 4.6-3.9 8-8.2 8s-8.2-3.4-8.2-8a8 8 0 0 1 1-3.8l-.5-4.4a1 1 0 0 1 .3-.8Zm2 2.6.3 2.6-.4.6a6 6 0 0 0-.8 3c0 3.4 2.9 6 6.3 6s6.3-2.6 6.3-6a6 6 0 0 0-.8-3l-.4-.6.3-2.6-1.8 1.4-.6-.2a7.7 7.7 0 0 0-5.4 0l-.6.2-1.8-1.4ZM9.4 11a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Zm5.2 0a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 14.6c.6 0 1.1.3 1.1.7 0 .5-.5.9-1.1.9s-1.1-.4-1.1-.9c0-.4.5-.7 1.1-.7Z" /></svg>
+    </div>
     <span>slsk.cat</span>
   </div>
 
@@ -206,12 +220,19 @@
     letter-spacing: -0.015em;
   }
   .mark {
+    display: grid;
+    place-items: center;
     width: 19px;
     height: 19px;
     border-radius: 6px;
     background: linear-gradient(140deg, var(--accent), var(--accent-hover));
     box-shadow: 0 2px 8px -2px var(--accent);
     transition: background var(--slow), box-shadow var(--slow);
+  }
+  .mark svg {
+    width: 12px;
+    height: 12px;
+    fill: #fff;
   }
 
   .command {

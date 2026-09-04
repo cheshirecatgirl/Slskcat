@@ -391,12 +391,15 @@ button {
   text-align: center;
 }
 .empty h3 {
-  font-size: 14.5px;
+  /* Twice the body size: this is the only thing on an otherwise blank pane,
+     and at body size it read as a caption for something that was not there. */
+  font-size: 26px;
   font-weight: 600;
   color: var(--text-2);
   letter-spacing: -0.01em;
 }
 .empty p {
+  margin-top: 2px;
   font-size: 13px;
   max-width: 36ch;
   line-height: 1.55;

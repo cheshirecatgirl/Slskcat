@@ -79,7 +79,7 @@
 </script>
 
 <div class="wrap">
-  {#if app.connecting && !app.loginError}
+  {#if app.resuming && !app.loginError}
     <!-- Signing in without a form: with a remembered password there is
          nothing to fill in, and flashing an unusable form for the length of a
          handshake reads as a glitch. -->
@@ -89,8 +89,15 @@
     </div>
   {:else}
   <form onsubmit={submit}>
-    <div class="mark" aria-hidden="true"></div>
-    <h1>Sign in</h1>
+    <div class="mark" aria-hidden="true">
+      <!-- A cat, drawn rather than fetched: two ears, two eyes, a nose. -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4.6 3.2a1 1 0 0 1 1.3-.1L9.2 5.6a9.6 9.6 0 0 1 5.6 0l3.3-2.5a1 1 0 0 1 1.6.9l-.5 4.4a8 8 0 0 1 1 3.8c0 4.6-3.9 8-8.2 8s-8.2-3.4-8.2-8a8 8 0 0 1 1-3.8l-.5-4.4a1 1 0 0 1 .3-.8Zm2 2.6.3 2.6-.4.6a6 6 0 0 0-.8 3c0 3.4 2.9 6 6.3 6s6.3-2.6 6.3-6a6 6 0 0 0-.8-3l-.4-.6.3-2.6-1.8 1.4-.6-.2a7.7 7.7 0 0 0-5.4 0l-.6.2-1.8-1.4ZM9.4 11a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Zm5.2 0a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2ZM12 14.6c.6 0 1.1.3 1.1.7 0 .5-.5.9-1.1.9s-1.1-.4-1.1-.9c0-.4.5-.7 1.1-.7Z"
+        />
+      </svg>
+    </div>
+    <h1>{app.addingAccount ? "Add an account" : "Sign in"}</h1>
 
     {#if app.displaced}
       <!-- Not a failure: the password was right and the server simply handed
@@ -172,8 +179,16 @@
     {/if}
 
     <button class="btn primary" type="submit" disabled={!canSubmit}>
-      {app.connecting ? "Connecting…" : "Sign in"}
+      {app.connecting ? "Connecting…" : app.addingAccount ? "Add account" : "Sign in"}
     </button>
+
+    {#if app.addingAccount}
+      <!-- The session is still running behind this; without a way back the
+           only exit from adding an account was to sign into one. -->
+      <button class="back" type="button" onclick={() => (app.addingAccount = false)}>
+        <span aria-hidden="true">←</span> Back to {app.username}
+      </button>
+    {/if}
   </form>
   {/if}
 </div>
@@ -202,11 +217,30 @@
   }
 
   .mark {
+    display: grid;
+    place-items: center;
     width: 42px;
     height: 42px;
     border-radius: 13px;
     background: linear-gradient(140deg, var(--accent), var(--accent-hover));
     box-shadow: 0 6px 22px -6px var(--accent);
+  }
+  .mark svg {
+    width: 26px;
+    height: 26px;
+    fill: #fff;
+  }
+
+  .back {
+    justify-self: start;
+    margin-top: 2px;
+    padding: 5px 2px;
+    font-size: 12.5px;
+    color: var(--text-3);
+    transition: color var(--fast);
+  }
+  .back:hover {
+    color: var(--text-1);
   }
 
   h1 {

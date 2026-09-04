@@ -128,6 +128,18 @@ export class AppState {
    * credentials were right — and the way back is one button, not a form.
    */
   displaced = $state(false);
+  /**
+   * True while signing in without anyone having pressed anything.
+   *
+   * Kept apart from `connecting` so the two look different: an automatic
+   * sign-in can replace the form with a line, because there is nothing to fill
+   * in, while a sign-in someone just asked for must leave their form on screen
+   * — if the password was wrong, taking the form away and putting it back is
+   * a flash of the wrong thing at the moment they need to read it.
+   */
+  resuming = $state(false);
+  /** True while the sign-in form is open to add an account, session intact. */
+  addingAccount = $state(false);
   shares = $state<{ directories: number; files: number } | null>(null);
 
   // --- search ---
@@ -289,20 +301,24 @@ export class AppState {
       case "connected":
         this.connected = true;
         this.connecting = false;
+        this.resuming = false;
         this.username = event.data.username;
         this.loginError = null;
         this.displaced = false;
+        this.addingAccount = false;
         break;
 
       case "loginFailed":
         this.connected = false;
         this.connecting = false;
+        this.resuming = false;
         this.loginError = event.data.reason;
         break;
 
       case "disconnected": {
         this.connected = false;
         this.connecting = false;
+        this.resuming = false;
         const why = event.data;
         this.displaced = why.type === "loggedInElsewhere";
         if (why.type === "lost") {

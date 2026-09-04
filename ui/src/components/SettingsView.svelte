@@ -26,7 +26,17 @@
       if (change.sharedDirs) await core.setSharedDirs(next.sharedDirs);
       if (change.uploadSlots !== undefined) await core.setUploadSlots(next.uploadSlots);
       if (change.downloadSlots !== undefined) await core.setDownloadSlots(next.downloadSlots);
+
+      // A proxy decides where the connection goes, and an open socket cannot
+      // be moved onto a different route after the fact. So the session is
+      // rebuilt: signing in again is the only thing "apply now" can mean, and
+      // doing it here is better than leaving it for the user to discover.
+      if (change.proxy !== undefined && app.connected) {
+        app.connecting = true;
+        app.settings = await core.connect(next);
+      }
     } catch (error) {
+      app.connecting = false;
       app.notify(String(error), "danger");
     }
   }
@@ -230,11 +240,12 @@
       <section>
         <h3>Proxy</h3>
         <p class="hint">
-          Sends the server connection and every outbound peer connection through
-          a proxy. Nothing can reach you through one, so listening is switched
-          off while it is on: you can search, browse, chat and download from
-          peers that accept connections, but peers behind their own firewall
-          become unreachable and nothing can be uploaded to them.
+          Sends the server connection and every peer connection through a proxy.
+          Nothing can reach you through one, so listening is switched off while
+          it is on — peers cannot open a connection to you, and instead ask the
+          server to have you open one to them. Downloads and uploads both still
+          work that way; it costs a round trip at the start of each transfer,
+          and a peer that never falls back stays out of reach.
         </p>
 
         <label class="check">
@@ -297,8 +308,9 @@
           </div>
           <p class="hint quiet">
             The destination is handed to the proxy as a name, never resolved
-            here, so no lookup announces where you are going. Takes effect on
-            the next sign-in.
+            here, so no lookup announces where you are going. Changing this
+            signs in again, because a connection already open cannot be moved
+            onto a different route.
           </p>
         {/if}
       </section>

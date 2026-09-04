@@ -14,11 +14,14 @@
 //! that matter are fixed width — four bytes of IPv4 and four of port — so a
 //! patched message is exactly as long as the one it replaces.
 //!
-//! What this cannot do is accept connections. A peer that will not take a
-//! direct connection is unreachable while a proxy is in use, and nothing can
-//! be uploaded to one, because the listening socket is the one part of the
-//! protocol a proxy has no answer for. Sessions using a proxy therefore run
-//! with listening disabled rather than advertising a port nobody can reach.
+//! What this cannot do is accept connections, so a proxied session runs with
+//! listening disabled rather than advertising a port nobody can reach. That is
+//! less limiting than it sounds: a peer that cannot open a connection to us
+//! asks the server to have us open one to it instead, and that request arrives
+//! as a peer address on the connection this module is already rewriting. Both
+//! directions of transfer therefore keep working, uploads included — at the
+//! cost of a round trip through the server before each one, and of any peer
+//! that never falls back.
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};

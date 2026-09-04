@@ -31,12 +31,14 @@
         // they cannot usefully change — it is already filled in.
         if (!loaded.rememberPassword || !loaded.username || !loaded.password) return;
         app.connecting = true;
+        app.resuming = true;
         try {
           app.settings = await core.connect(loaded);
         } catch (error) {
           // Falls through to the form with the reason on it, which is the
           // same place a failed manual sign-in lands.
           app.connecting = false;
+          app.resuming = false;
           app.loginError = String(error);
         }
       })
@@ -101,15 +103,15 @@
 <svelte:window onkeydown={onKey} />
 
 <!-- The section drives the accent and the colour of the field behind it. -->
-<div class="window" data-space={app.connected ? section : "search"}>
+<div class="window" data-space={app.connected && !app.addingAccount ? section : "search"}>
   <div class="field-glow" aria-hidden="true"></div>
 
-  {#if app.connected}
+  {#if app.connected && !app.addingAccount}
     <Sidebar bind:section onCommand={() => (palette = true)} />
   {/if}
 
-  <div class="canvas" class:solo={!app.connected}>
-    {#if !app.connected}
+  <div class="canvas" class:solo={!app.connected || app.addingAccount}>
+    {#if !app.connected || app.addingAccount}
       <ConnectView />
     {:else if section === "search"}
       <SearchView />
