@@ -11,10 +11,12 @@
   import WishlistView from "./components/WishlistView.svelte";
   import TransfersView from "./components/TransfersView.svelte";
   import BrowseView from "./components/BrowseView.svelte";
+  import LibraryView from "./components/LibraryView.svelte";
+  import PlayerBar from "./components/PlayerBar.svelte";
   import MessagesView from "./components/MessagesView.svelte";
   import SettingsView from "./components/SettingsView.svelte";
 
-  let section = $state<Section>("search");
+  let section = $state<Section>("explore");
   let palette = $state(false);
 
   onMount(() => {
@@ -103,7 +105,7 @@
 <svelte:window onkeydown={onKey} />
 
 <!-- The section drives the accent and the colour of the field behind it. -->
-<div class="window" data-space={app.connected && !app.addingAccount ? section : "search"}>
+<div class="window" data-space={app.connected && !app.addingAccount ? section : "explore"}>
   <div class="field-glow" aria-hidden="true"></div>
 
   {#if app.connected && !app.addingAccount}
@@ -113,14 +115,16 @@
   <div class="canvas" class:solo={!app.connected || app.addingAccount}>
     {#if !app.connected || app.addingAccount}
       <ConnectView />
-    {:else if section === "search"}
+    {:else if section === "explore"}
       <SearchView />
     {:else if section === "wishlist"}
       <WishlistView />
     {:else if section === "transfers"}
       <TransfersView />
-    {:else if section === "browse"}
+    {:else if section === "discover"}
       <BrowseView />
+    {:else if section === "library"}
+      <LibraryView />
     {:else if section === "messages"}
       <MessagesView />
     {:else}
@@ -135,6 +139,12 @@
     />
   {/if}
 
+  <!-- Outside the canvas, so what is playing survives moving between
+       sections and stays put at the bottom of the window. -->
+  {#if app.connected && !app.addingAccount}
+    <PlayerBar />
+  {/if}
+
   <Notices />
 </div>
 
@@ -143,6 +153,9 @@
     position: relative;
     display: grid;
     grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    /* A second row for the player, which takes only the height it needs and
+       leaves the rest to the content above it. */
+    grid-template-rows: minmax(0, 1fr) auto;
     height: 100%;
     padding: var(--gap) var(--gap) var(--gap) 0;
     background: var(--bg);

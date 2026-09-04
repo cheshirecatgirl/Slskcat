@@ -496,7 +496,6 @@
   .slots input {
     flex: 1;
     max-width: 260px;
-    accent-color: var(--accent);
   }
   .value {
     font-size: 13px;

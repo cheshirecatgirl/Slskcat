@@ -30,9 +30,10 @@
   });
 
   const navigation: Action[] = [
-    go("search", "Search", "Go to search"),
+    go("explore", "Explore", "Go to search"),
     go("transfers", "Transfers", "Go to transfers"),
-    go("browse", "Browse", "Go to browse"),
+    go("discover", "Discover", "Browse another user's shares"),
+    go("library", "Library", "Your own downloads and shares"),
     go("messages", "Messages", "Go to rooms and direct messages"),
     go("settings", "Settings", "Go to settings"),
   ];
@@ -67,7 +68,7 @@
         hint: "Open this user's shares",
         run: () => {
           fire(core.browseUser(text));
-          section = "browse";
+          section = "discover";
           onclose();
         },
       },
@@ -88,7 +89,7 @@
     try {
       const id = await core.search(text);
       app.startSearch(id, text);
-      section = "search";
+      section = "explore";
     } catch (error) {
       app.notify(String(error), "danger");
     }

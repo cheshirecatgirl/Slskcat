@@ -123,7 +123,7 @@
 
 /* Section accents. The field, the active pill and every control follow these,
    so moving between sections reads as moving between places. */
-[data-space="search"] {
+[data-space="explore"] {
   --accent: #8b7bf0;
   --accent-hover: #9d8ff5;
   --accent-quiet: #8b7bf01f;
@@ -144,12 +144,19 @@
   --space-a: #17a08a66;
   --space-b: #4f8ef73d;
 }
-[data-space="browse"] {
+[data-space="discover"] {
   --accent: #e0954a;
   --accent-hover: #eda65d;
   --accent-quiet: #e0954a1f;
   --space-a: #cf7a2e66;
   --space-b: #e0574f3d;
+}
+[data-space="library"] {
+  --accent: #c48ae0;
+  --accent-hover: #d29cec;
+  --accent-quiet: #c48ae01f;
+  --space-a: #a566cf66;
+  --space-b: #6d5ce73d;
 }
 [data-space="messages"] {
   --accent: #ec6f9e;
@@ -375,6 +382,18 @@ button {
   font-family: var(--mono);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Every slider follows the section accent.
+ *
+ * `accent-color` was set per view, so a control added anywhere else came out
+ * in the browser's default blue — which is the one colour in the palette that
+ * belongs to nobody.
+ */
+input[type="range"],
+input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 
 /* Numeric columns must not jitter as digits change. */

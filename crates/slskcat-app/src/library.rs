@@ -18,6 +18,85 @@ pub struct Downloaded {
     pub size: u64,
 }
 
+/// A file in one of this machine's own folders, for the library view.
+///
+/// Carries the full path as well as the name, because unlike the "already
+/// downloaded" index this is a list to open things from, not a set to compare
+/// against.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFile {
+    /// Absolute path, which is what a player is handed.
+    pub path: String,
+    /// The folder it sits in, relative to the root it was found under.
+    pub folder: String,
+    pub name: String,
+    pub size: u64,
+}
+
+/// One of this machine's folders and what is in it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalRoot {
+    pub path: String,
+    /// Whether this is where downloads land, as opposed to a shared folder.
+    pub downloads: bool,
+    pub files: Vec<LocalFile>,
+}
+
+/// Everything under `dir`, with paths, for the library view.
+#[must_use]
+pub fn list(dir: &Path, downloads: bool) -> LocalRoot {
+    let mut files = Vec::new();
+    collect(dir, dir, 0, &mut files);
+    files.sort_by(|a, b| (&a.folder, &a.name).cmp(&(&b.folder, &b.name)));
+    LocalRoot {
+        path: dir.to_string_lossy().into_owned(),
+        downloads,
+        files,
+    }
+}
+
+fn collect(root: &Path, dir: &Path, depth: usize, found: &mut Vec<LocalFile>) {
+    if depth > MAX_DEPTH || found.len() >= MAX_FILES {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if found.len() >= MAX_FILES {
+            return;
+        }
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            collect(root, &path, depth + 1, found);
+            continue;
+        }
+        if !kind.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Ok(meta) = entry.metadata() else { continue };
+        let folder = path
+            .parent()
+            .and_then(|parent| parent.strip_prefix(root).ok())
+            .map(|rest| rest.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        found.push(LocalFile {
+            path: path.to_string_lossy().into_owned(),
+            folder,
+            name: name.to_owned(),
+            size: meta.len(),
+        });
+    }
+}
+
 /// How deep to walk. Downloads land in the folder or one level under it, in a
 /// directory named for the release; deeper is somebody's own filing.
 const MAX_DEPTH: usize = 4;
@@ -113,6 +192,29 @@ mod tests {
         let found = scan(&dir);
         let _ = std::fs::remove_dir_all(&dir);
         assert!(found.is_empty(), "an unfinished file must not count as had");
+    }
+
+    #[test]
+    fn the_library_lists_paths_and_the_folder_each_sits_in() {
+        let dir = temp("list");
+        std::fs::create_dir_all(dir.join("Album")).unwrap();
+        std::fs::write(dir.join("loose.flac"), b"12345").unwrap();
+        std::fs::write(dir.join("Album/track.flac"), b"12").unwrap();
+
+        let root = list(&dir, true);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(root.downloads);
+        assert_eq!(root.files.len(), 2);
+        // Sorted by folder then name, so the root's own files come first.
+        assert_eq!(root.files[0].folder, "");
+        assert_eq!(root.files[0].name, "loose.flac");
+        assert_eq!(root.files[1].folder, "Album");
+        assert_eq!(root.files[1].size, 2);
+        assert!(
+            root.files[1].path.ends_with("track.flac"),
+            "the full path is what a player is handed"
+        );
     }
 
     #[test]

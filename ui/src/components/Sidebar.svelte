@@ -77,9 +77,22 @@
   // and keeps the bundle free of a dependency that would dwarf them.
   const items: { id: Section; label: string; path: string }[] = [
     {
-      id: "search",
-      label: "Search",
+      id: "explore",
+      label: "Explore",
       path: "M11 4a7 7 0 1 0 4.2 12.6l3.6 3.6 1.4-1.4-3.6-3.6A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
+    },
+    {
+      id: "discover",
+      // Someone else's shelves rather than a folder of your own: a compass,
+      // hollow with the same two-unit wall as the rest of the set.
+      label: "Discover",
+      path: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm4.6 3.4-2.4 5.6-5.6 2.4 2.4-5.6 5.6-2.4Zm-3.2 3.2-1.6.7-.7 1.6 1.6-.7.7-1.6Z",
+    },
+    {
+      id: "library",
+      // Your own files: stacked spines.
+      label: "Library",
+      path: "M4 3h4v18H4V3Zm2 2v14h.1V5H6Zm4-2h4v18h-4V3Zm2 2v14h.1V5H12Zm4.3-1.6 3.9 1 -4.5 17.4-3.9-1 4.5-17.4Zm1.4 2.5-3.5 13.6.1 0 3.5-13.6-.1 0Z",
     },
     {
       id: "wishlist",
@@ -93,11 +106,6 @@
       // the arrow hung a unit off the centre of its own line. Every part of
       // this one is symmetric about x=12.
       path: "M12 17 6 11l1.4-1.4L11 13.2V3h2v10.2l3.6-3.6L18 11ZM4 19h16v2H4v-2Z",
-    },
-    {
-      id: "browse",
-      label: "Browse",
-      path: "M4 5a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm2 2v10h12V7H6Z",
     },
     {
       id: "messages",

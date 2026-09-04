@@ -10,7 +10,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { hydrateSettings } from "./types";
-import type { CoreEvent, SearchId, Settings, ShareVerdict } from "./types";
+import type { CoreEvent, LocalRoot, SearchId, Settings, ShareVerdict } from "./types";
 
 /** Must match `slskcat_app::EVENT_CHANNEL`. */
 const EVENT_CHANNEL = "slskcat://event";
@@ -71,4 +71,6 @@ export const core = {
   setDownloadSlots: (slots: number) => invoke<void>("set_download_slots", { slots }),
   /** Everything already in the download folder, as name and size. */
   downloadedFiles: () => invoke<{ name: string; size: number }[]>("downloaded_files"),
+  /** This machine's own folders: where downloads land, and what is shared. */
+  localLibrary: () => invoke<LocalRoot[]>("local_library"),
 };

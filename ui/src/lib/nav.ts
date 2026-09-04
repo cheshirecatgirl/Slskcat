@@ -1,8 +1,9 @@
 /** The top-level sections the sidebar switches between. */
 export type Section =
-  | "search"
+  | "explore"
+  | "discover"
+  | "library"
   | "wishlist"
   | "transfers"
-  | "browse"
   | "messages"
   | "settings";

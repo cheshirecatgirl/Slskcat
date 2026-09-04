@@ -268,11 +268,7 @@
     gap: 8px;
     margin-top: -3px;
     cursor: pointer;
-  }
-  .check input {
-    accent-color: var(--accent);
-  }
-  .check span {
+  }  .check span {
     font-weight: 400;
     color: var(--text-2);
   }

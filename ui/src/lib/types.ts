@@ -214,6 +214,24 @@ export function blankProxy(): Proxy {
   return { kind: "socks5", host: "", port: 1080, username: "", password: "" };
 }
 
+/** A file in one of this machine's own folders. */
+export interface LocalFile {
+  /** Absolute path, which is what the player is handed. */
+  path: string;
+  /** The folder it sits in, relative to the root it was found under. */
+  folder: string;
+  name: string;
+  size: number;
+}
+
+/** One of this machine's folders and what is in it. */
+export interface LocalRoot {
+  path: string;
+  /** Whether this is where downloads land, as opposed to a shared folder. */
+  downloads: boolean;
+  files: LocalFile[];
+}
+
 export type Disconnect =
   | { type: "requested" }
   | { type: "loggedInElsewhere" }

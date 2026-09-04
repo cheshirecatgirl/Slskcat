@@ -112,7 +112,11 @@ fn load_settings(handle: AppHandle) -> Result<Settings, String> {
 
 #[tauri::command]
 fn save_settings(handle: AppHandle, settings: Settings) -> Result<Settings, String> {
-    settings::save(&handle, &settings)
+    let saved = settings::save(&handle, &settings)?;
+    // Folders can be added or moved after startup, and the player can only
+    // read what the scope names.
+    allow_reading_own_folders(&handle);
+    Ok(saved)
 }
 
 /// Make another known account the current one, and return the settings it
@@ -275,6 +279,46 @@ fn downloaded_files(handle: AppHandle) -> Result<Vec<library::Downloaded>, Strin
     Ok(library::scan(&settings.to_config().download_dir))
 }
 
+/// This machine's own folders — where downloads land, and everything shared.
+#[tauri::command]
+fn local_library(handle: AppHandle) -> Result<Vec<library::LocalRoot>, String> {
+    let config = settings::load(&handle)?.to_config();
+    let mut roots = vec![library::list(&config.download_dir, true)];
+    for shared in &config.shared_dirs {
+        // A folder that is both shared and where downloads land is one place,
+        // and listing it twice would double everything in it.
+        if shared == &config.download_dir {
+            continue;
+        }
+        roots.push(library::list(shared, false));
+    }
+    Ok(roots)
+}
+
+/// Let the player read back the folders this machine already owns.
+///
+/// The asset scope starts empty and is filled here rather than declared in
+/// `tauri.conf.json`, because which folders those are is the user's choice and
+/// not knowable at build time. A wildcard would be simpler and would hand the
+/// interface the whole filesystem — including, on a bad day, whatever the
+/// share guard exists to keep off the network.
+///
+/// Failure is quiet: not being able to read a folder costs playback of files
+/// in it, which is not worth refusing to start over.
+fn allow_reading_own_folders(handle: &AppHandle) {
+    let Ok(settings) = settings::load(handle) else {
+        return;
+    };
+    let config = settings.to_config();
+    let scope = handle.asset_protocol_scope();
+    // Recursive: albums arrive as folders, and a download directory is nothing
+    // but folders.
+    let _ = scope.allow_directory(&config.download_dir, true);
+    for shared in &config.shared_dirs {
+        let _ = scope.allow_directory(shared, true);
+    }
+}
+
 /// Build and run the application.
 ///
 /// # Panics
@@ -289,6 +333,7 @@ pub fn run() {
                 core,
                 searches: Mutex::new(SearchIds::new()),
             });
+            allow_reading_own_folders(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -318,6 +363,7 @@ pub fn run() {
             set_upload_slots,
             set_download_slots,
             downloaded_files,
+            local_library,
         ])
         .run(tauri::generate_context!())
         .expect("starting the slsk.cat window");

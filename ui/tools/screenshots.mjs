@@ -38,6 +38,8 @@ const bridge = () => {
       if (cmd === "plugin:event|unlisten") return null;
       if (cmd === "search") return 1;
       if (cmd === "load_settings") return { ...window.__settings };
+      if (cmd === "local_library") return window.__library;
+      if (cmd === "downloaded_files") return [];
       if (cmd === "set_wishlist") return null;
       if (cmd === "assess_share") {
         // Mirrors the core's classification closely enough to drive the UI.
@@ -84,7 +86,30 @@ const bridge = () => {
     keychainAvailable: true,
   };
 
+  window.__library = [
+    {
+      path: "/home/listener/Downloads",
+      downloads: true,
+      files: [
+        { path: "/home/listener/Downloads/01 Xtal.flac", folder: "Aphex Twin - SAW 85-92", name: "01 Xtal.flac", size: 30_000_000 },
+        { path: "/home/listener/Downloads/02 Tha.flac", folder: "Aphex Twin - SAW 85-92", name: "02 Tha.flac", size: 41_000_000 },
+        { path: "/home/listener/Downloads/folder.jpg", folder: "Aphex Twin - SAW 85-92", name: "folder.jpg", size: 240_000 },
+      ],
+    },
+    {
+      path: "/home/listener/Music/FLAC",
+      downloads: false,
+      files: [
+        { path: "/home/listener/Music/FLAC/a.flac", folder: "Boards of Canada - Geogaddi", name: "01 Ready Lets Go.flac", size: 8_000_000 },
+      ],
+    },
+  ];
+
   // Push a core event into the app exactly as the Rust side would.
+  // `convertFileSrc` reads this to build an asset URL. Outside Tauri it is
+  // absent, and the library's play button would throw before the bar appeared.
+  window.__TAURI_INTERNALS__.convertFileSrc = (path) => `asset://localhost/${encodeURIComponent(path)}`;
+
   window.__emit = (payload) => {
     eventHandler?.({ event: "slskcat://event", id: 1, payload });
   };
@@ -240,8 +265,8 @@ const run = async () => {
     await page.click('button[role="tab"]:has-text("Downloads")');
     await page.waitForTimeout(200);
 
-    // 4c. Browse: the people list, with the box filtering it
-    await page.click('button:has-text("Browse")');
+    // 4c. Discover: the people list, with the box filtering it
+    await page.click('button:has-text("Discover")');
     await page.waitForTimeout(300);
     await page.click('.entry:has-text("velvet_hare")');
     await page.evaluate(() => {
@@ -268,7 +293,23 @@ const run = async () => {
       });
     });
     await page.waitForTimeout(400);
-    await shot("4c-browse");
+    await shot("4c-discover");
+
+    // 4d. Library: this machine's own folders, with the player running
+    await page.click('button:has-text("Library")');
+    await page.waitForTimeout(400);
+    await shot("4d-library");
+
+    // 4e. The player bar, with its effects panel open. The mocked bridge has
+    // no real file behind the path, so playback itself fails — the bar and its
+    // controls are what this shot is for.
+    await page.click('.file:has-text("01 Xtal.flac") .go');
+    await page.waitForTimeout(300);
+    await page.click('.fx');
+    await page.waitForTimeout(400);
+    await shot("4e-player");
+    await page.click('.fx');
+    await page.waitForTimeout(200);
 
     // 5. Messages: the rooms list
     await page.evaluate(() => {
