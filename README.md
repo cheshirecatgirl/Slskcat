@@ -127,12 +127,14 @@ The layout follows Arc: the window is a coloured field, the content floats on
 it as one rounded canvas, and navigation lives entirely in the sidebar. No top
 chrome.
 
-- Each section owns an accent — indigo for search, blue for wishlist, teal for
-  transfers, amber for browse, rose for rooms — and the field tints to match.
+- Each section owns an accent (indigo for search, violet for the library, teal
+  for transfers, amber for discover, rose for rooms) and the field tints to
+  match.
 - ⌘K opens the command bar. It is search-first: type anything and the top
   action runs it against the network.
-- Wishlist is its own section: standing searches the server re-runs on the
-  interval it dictates, so hits accumulate while you are elsewhere.
+- Library is what you have and what you are waiting for, in two tabs: the files
+  on this machine, and the wishlist — standing searches the server re-runs on
+  the interval it dictates, so hits accumulate while you are elsewhere.
 - Transfers are two tabs, downloads and uploads, given equal weight — uploads
   are what other people see of you. Upload rows fill from the right, so
   direction reads before the text does.

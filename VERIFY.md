@@ -92,7 +92,7 @@ Click through, in this order:
 ☐ Sign in — check **Remember password**
 ☐ Search something — results stream in, columns line up
 ☐ Press **⌘K** / **Ctrl-K** — palette opens, typing offers to search
-☐ **Wishlist** — add a wish, it appears
+☐ **Library → Wishlist** — add a wish, it appears; **Files** lists media only
 ☐ **Transfers** — both tabs render
 ☐ **Rooms** — join one, send a line
 ☐ **Settings** — every section renders

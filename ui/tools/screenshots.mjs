@@ -230,7 +230,10 @@ const run = async () => {
         },
       });
     });
-    await page.click('button:has-text("Wishlist")');
+    // Wishes live under Library now, beside the files already here.
+    await page.click('button:has-text("Library")');
+    await page.waitForTimeout(300);
+    await page.click('.segbtn:has-text("Wishlist")');
     await page.waitForTimeout(300);
     await page.click('.line:has-text("geogaddi")');
     await page.waitForTimeout(400);
@@ -316,6 +319,8 @@ const run = async () => {
 
     // 4d. Library: this machine's own folders, with the player running
     await page.click('button:has-text("Library")');
+    await page.waitForTimeout(300);
+    await page.click('.segbtn:has-text("Files")');
     await page.waitForTimeout(400);
     await shot("4d-library");
 

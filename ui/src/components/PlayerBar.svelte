@@ -21,7 +21,7 @@
 </script>
 
 <!-- Lives outside every view, so playback survives moving between them. -->
-<div class="bar" class:showing={player.track !== null}>
+<div class="player" class:showing={player.track !== null}>
   <!-- `crossorigin` is what makes this audible at all. Files come from the
        asset protocol, which is a different origin from the page, and a Web
        Audio graph fed by a cross-origin element it could not read with CORS
@@ -87,7 +87,7 @@
           d="M7 6h10v3l4-4-4-4v3H5v6h2V6Zm10 12H7v-3l-4 4 4 4v-3h12v-6h-2v4Z"
         />
       </svg>
-      {#if player.loop === "folder"}<span class="what num">folder</span>{/if}
+      {#if player.loop === "folder"}<span class="mode num">folder</span>{/if}
     </button>
 
     <button
@@ -189,10 +189,10 @@
 </div>
 
 <style>
-  .bar {
+  .player {
     display: none;
   }
-  .bar.showing {
+  .player.showing {
     position: relative;
     display: flex;
     align-items: center;
@@ -303,7 +303,7 @@
   .loop.on {
     color: var(--accent);
   }
-  .what {
+  .mode {
     font-size: 10.5px;
     letter-spacing: 0.02em;
   }
@@ -318,6 +318,8 @@
     color: var(--text-3);
     transition: background var(--fast), color var(--fast);
   }
+  /* The close glyph carries its own size: at 11.5px a multiplication sign
+     reads as a speck beside the FX label. */
   .shut {
     font-size: 15px;
     line-height: 1;
@@ -353,16 +355,10 @@
     font-style: normal;
     color: var(--text-1);
   }
-  /* The other labels stack a name over its slider; this one is a box and its
-     name, side by side. `display` has to be reset, not just the direction. */
+  /* The other labels stack a name over its slider, and `.panel label` sets
+     `display: grid` to do it, so this one has to set `display` back. */
   .panel .check {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-  .panel .check input {
-    accent-color: var(--accent);
   }
   .reset {
     justify-self: start;

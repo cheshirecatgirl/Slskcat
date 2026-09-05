@@ -81,14 +81,6 @@
       path: "M4 4h7v16H4V4Zm2 2v12h3V6H6Zm7-3h7v17h-7V3Zm2 2v13h3V5h-3Z",
     },
     {
-      id: "wishlist",
-      label: "Wishlist",
-      // The wall was thinner across the two lobes than down the point,
-      // because the outer and inner curves were struck from different
-      // centres. Both are arcs of the same radius now, offset by two units.
-      path: "M12 20.7 3.9 13a5.1 5.1 0 0 1 7.2-7.2l.9.9.9-.9A5.1 5.1 0 0 1 20.1 13L12 20.7Zm0-2.8 6.7-6.4a3.1 3.1 0 0 0-4.4-4.4L12 9.4 9.7 7.1a3.1 3.1 0 0 0-4.4 4.4L12 17.9Z",
-    },
-    {
       id: "transfers",
       label: "Transfers",
       // The shaft used to span x 12-14 while the baseline spanned 4-20, so

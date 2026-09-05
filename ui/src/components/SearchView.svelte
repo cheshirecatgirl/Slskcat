@@ -893,18 +893,6 @@
     width: auto;
     max-width: none;
   }
-  .check {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
-    color: var(--text-2);
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .check input {
-    accent-color: var(--accent);
-  }
   .summary {
     margin-left: auto;
     font-size: 12px;

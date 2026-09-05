@@ -201,7 +201,7 @@
 <div class="view">
   <aside>
     <div class="pane-head">
-      <div class="seg" role="tablist">
+      <div class="seg" role="tablist" aria-label="Rooms or people">
         <button
           class="segbtn"
           class:on={side === "rooms"}
@@ -353,32 +353,16 @@
 </div>
 
 <style>
-  /* Rooms and people are different lists, so the pane switches between them
-     rather than stacking one above the other. */
+  /* The shared control, with two changes. The pane behind it is already
+     `--surface-2`, so the track steps to `--surface` to stay visible; and it
+     heads a whole pane here rather than sitting in a row, so the two halves
+     split the width between them. */
   .seg {
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: var(--radius-sm);
-    /* The pane behind this is `--surface-2`, so the track steps away from it
-       or the control reads as two words of plain text. */
     background: var(--surface);
   }
   .segbtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
     flex: 1;
     padding: 4px 10px;
-    border-radius: calc(var(--radius-sm) - 2px);
-    font-size: 12px;
-    color: var(--text-3);
-    transition: background var(--fast), color var(--fast);
-  }
-  .segbtn.on {
-    background: var(--surface-1);
-    color: var(--text-1);
   }
   /* Friends are marked in place rather than dragged between lists: the star
      is next to the name it applies to, and the name does not move when it is
@@ -420,13 +404,6 @@
     font-weight: 600;
   }
 
-  .segbtn .pip {
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--accent-quiet);
-    color: var(--accent);
-    font-size: 10.5px;
-  }
 
   .view {
     display: grid;

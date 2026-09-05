@@ -9,7 +9,6 @@
   import CommandBar from "./components/CommandBar.svelte";
   import ConnectView from "./components/ConnectView.svelte";
   import SearchView from "./components/SearchView.svelte";
-  import WishlistView from "./components/WishlistView.svelte";
   import TransfersView from "./components/TransfersView.svelte";
   import BrowseView from "./components/BrowseView.svelte";
   import LibraryView from "./components/LibraryView.svelte";
@@ -118,8 +117,6 @@
       <ConnectView />
     {:else if section === "explore"}
       <SearchView />
-    {:else if section === "wishlist"}
-      <WishlistView />
     {:else if section === "transfers"}
       <TransfersView />
     {:else if section === "discover"}
@@ -167,10 +164,11 @@
     grid-template-columns: minmax(0, 1fr);
     padding: var(--gap);
   }
-  /* The bar carries its own left margin because the sidebar normally sits
+  /* The player carries its own left margin because the sidebar normally sits
      flush against the window edge. With no sidebar the window pads both
-     sides, and the two would add up. */
-  .window:has(.canvas.solo) :global(.bar) {
+     sides, and the two would add up. Reaching into another component needs a
+     name nothing else uses — `.bar` is also a progress bar in Transfers. */
+  .window:has(.canvas.solo) :global(.player) {
     margin-left: 0;
   }
 

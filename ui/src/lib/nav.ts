@@ -3,7 +3,6 @@ export type Section =
   | "explore"
   | "discover"
   | "library"
-  | "wishlist"
   | "transfers"
   | "messages"
   | "settings";

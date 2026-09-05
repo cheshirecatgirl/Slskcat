@@ -140,7 +140,7 @@
   }
 
   header {
-    padding: 15px 18px 12px;
+    padding: 12px 18px 12px;
   }
   form {
     display: flex;

@@ -295,13 +295,12 @@
     color: var(--text-2);
   }
 
+  /* `label` above stacks a name over its field; this one is a row. */
   .check {
     flex-direction: row;
-    align-items: center;
-    gap: 8px;
     margin-top: -3px;
-    cursor: pointer;
-  }  .check span {
+  }
+  .check span {
     font-weight: 400;
     color: var(--text-2);
   }
