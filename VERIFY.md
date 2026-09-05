@@ -92,7 +92,8 @@ Click through, in this order:
 ☐ Sign in — check **Remember password**
 ☐ Search something — results stream in, columns line up
 ☐ Press **⌘K** / **Ctrl-K** — palette opens, typing offers to search
-☐ **Library → Wishlist** — add a wish, it appears; **Files** lists media only
+☐ **Library → My list** — media only; the grid icon shows releases with covers
+☐ **Library → Wishlist** — add a wish, it appears
 ☐ **Transfers** — both tabs render
 ☐ **Rooms** — join one, send a line
 ☐ **Settings** — every section renders
@@ -179,7 +180,7 @@ so far. Everything else compiles but has never been packaged.
 
 ## Already verified — don't redo these
 
-- 90 Rust tests and 30 frontend tests, clippy under pedantic-denied, fmt,
+- 93 Rust tests and 30 frontend tests, clippy under pedantic-denied, fmt,
   frontend typecheck
 - The credential store round trip, against a real `gnome-keyring`
 - The share guard, including a symlinked root pointing into a refused location

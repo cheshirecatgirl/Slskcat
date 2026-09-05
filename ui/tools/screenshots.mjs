@@ -39,6 +39,7 @@ const bridge = () => {
       if (cmd === "search") return 1;
       if (cmd === "load_settings") return { ...window.__settings };
       if (cmd === "local_library") return window.__library;
+      if (cmd === "local_albums") return window.__albums;
       if (cmd === "downloaded_files") return [];
       if (cmd === "set_wishlist") return null;
       if (cmd === "assess_share") {
@@ -109,10 +110,64 @@ const bridge = () => {
     },
   ];
 
+  // Releases, with covers drawn rather than fetched: the real command reads
+  // tags and writes artwork out, and neither exists behind a mocked bridge.
+  const sleeve = (a, b, glyph) =>
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">` +
+        `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+        `<stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/>` +
+        `</linearGradient></defs><rect width="300" height="300" fill="url(#g)"/>` +
+        `<text x="150" y="196" font-size="132" text-anchor="middle" fill="#ffffffcc"` +
+        ` font-family="sans-serif">${glyph}</text></svg>`,
+    );
+
+  const release = (key, title, artist, year, cover, names) => ({
+    key,
+    title,
+    artist,
+    year,
+    cover,
+    downloads: true,
+    tracks: names.map((name, i) => ({
+      path: `/home/listener/Downloads/${key}/${name}`,
+      name,
+      size: 30_000_000 + i * 2_000_000,
+      title: name.replace(/^\d+ /, "").replace(/\.flac$/, ""),
+      artist,
+      number: i + 1,
+      disc: null,
+      seconds: 180 + i * 41,
+    })),
+  });
+
+  window.__albums = [
+    release("saw", "Selected Ambient Works 85-92", "Aphex Twin", 1992, sleeve("#5b4bd6", "#c05fa8", "△"), [
+      "01 Xtal.flac", "02 Tha.flac", "03 Pulsewidth.flac", "04 Ageispolis.flac",
+      "05 i.flac", "06 Green Calx.flac", "07 Heliosphan.flac",
+    ]),
+    release("geo", "Geogaddi", "Boards of Canada", 2002, sleeve("#a2582b", "#d8a24a", "◎"), [
+      "01 Ready Lets Go.flac", "02 Music Is Math.flac", "03 Beware the Friendly Stranger.flac",
+    ]),
+    release("rdj", "Richard D James Album", "Aphex Twin", 1996, sleeve("#2f7d55", "#8fd18a", "✳"), [
+      "01 4.flac", "02 Cornish Acid.flac", "03 Peek 824545201.flac",
+    ]),
+    release("mus", "Musick to Play in the Dark 2", "Coil", 2000, sleeve("#1f2b5c", "#5f7bd6", "☾"), [
+      "01 Something.flac", "02 Tiny Golden Books.flac",
+    ]),
+    release("hex", "Hexadecimal Sunrise", "sparrowfall", null, null, [
+      "01 Untitled.flac", "02 Untitled.flac",
+    ]),
+  ];
+
   // Push a core event into the app exactly as the Rust side would.
   // `convertFileSrc` reads this to build an asset URL. Outside Tauri it is
   // absent, and the library's play button would throw before the bar appeared.
-  window.__TAURI_INTERNALS__.convertFileSrc = (path) => `asset://localhost/${encodeURIComponent(path)}`;
+  // Covers in this mock are drawn as data URIs rather than read off disk, and
+  // wrapping one in an asset URL would only break it.
+  window.__TAURI_INTERNALS__.convertFileSrc = (path) =>
+    path.startsWith("data:") ? path : `asset://localhost/${encodeURIComponent(path)}`;
 
   window.__emit = (payload) => {
     eventHandler?.({ event: "slskcat://event", id: 1, payload });
@@ -320,9 +375,21 @@ const run = async () => {
     // 4d. Library: this machine's own folders, with the player running
     await page.click('button:has-text("Library")');
     await page.waitForTimeout(300);
-    await page.click('.segbtn:has-text("Files")');
+    await page.click('.segbtn:has-text("My list")');
     await page.waitForTimeout(400);
     await shot("4d-library");
+
+    // 4d2. The same library as releases, from tags and embedded artwork.
+    await page.click('.shapebtn[aria-label="As releases"]');
+    await page.waitForTimeout(500);
+    await shot("4d2-albums");
+    await page.click(".card");
+    await page.waitForTimeout(400);
+    await shot("4d3-album");
+    await page.click(".back");
+    await page.waitForTimeout(300);
+    await page.click('.shapebtn[aria-label="As files"]');
+    await page.waitForTimeout(300);
 
     // 4e. The player bar, with its effects panel open. The mocked bridge has
     // no real file behind the path, so playback itself fails — the bar and its

@@ -249,7 +249,7 @@
   }
   .file:hover .go {
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
   }
   .fname {
     flex: 1;

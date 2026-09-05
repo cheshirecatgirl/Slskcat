@@ -43,3 +43,10 @@ serde_json = "1"
 # The default `v1` feature covers Keychain, Credential Manager and the
 # D-Bus Secret Service, so no per-platform wiring or libsecret headers.
 keyring = "4"
+# Tag and cover-art reading for the album view. Five crates all told, and the
+# only one of them that is not lofty itself is a base64 decoder.
+#
+# `default-features = false` does not build: lofty 0.25.1 references
+# `Id3v2Error` from code that is not behind the same cfg as the type, so the
+# compression feature has to stay on.
+lofty = "0.25.1"

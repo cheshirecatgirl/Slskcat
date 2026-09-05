@@ -60,6 +60,13 @@ pub struct Settings {
     pub search_timeout_secs: u64,
     /// Interface scale as a percentage. 100 is the designed size.
     pub ui_scale: u32,
+    /// Whether a wish that finds something queues it without being asked.
+    ///
+    /// A wish is a specific thing someone already decided they want, so this
+    /// is not as aggressive as it sounds — but it is off by default, because
+    /// a loose wish can match a great deal and the queue is not free.
+    #[serde(default)]
+    pub auto_download_wishes: bool,
     /// Rooms to rejoin on sign-in, so the list is there before the server
     /// answers. The server remembers nothing between sessions.
     pub rooms: Vec<String>,
@@ -101,6 +108,7 @@ impl Default for Settings {
             proxy: None,
             search_timeout_secs: config.search_timeout.as_secs(),
             ui_scale: 100,
+            auto_download_wishes: false,
             rooms: Vec::new(),
             friends: Vec::new(),
             accounts: Vec::new(),

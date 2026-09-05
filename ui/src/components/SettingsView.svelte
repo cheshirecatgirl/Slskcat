@@ -234,6 +234,25 @@
       </section>
 
       <section>
+        <h3>Wishlist</h3>
+        <p class="hint">
+          A wish is a search the server keeps re-running. It can queue what it
+          finds without asking, up to twenty files per wish per session — a
+          loose wish matches a great deal, and the rest stay in the list to
+          pick from by hand.
+        </p>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={settings.autoDownloadWishes}
+            onchange={(event) =>
+              void update({ autoDownloadWishes: event.currentTarget.checked })}
+          />
+          <span>Download what my wishes find</span>
+        </label>
+      </section>
+
+      <section>
         <h3>Interface scale</h3>
         <p class="hint">Everything larger or smaller together, in steps of ten.</p>
         <div class="slots">

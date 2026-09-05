@@ -16,6 +16,7 @@
 // handlers below cannot borrow them however little they consume.
 #![allow(clippy::needless_pass_by_value)]
 
+pub mod albums;
 pub mod library;
 mod settings;
 
@@ -301,6 +302,35 @@ fn local_library(handle: AppHandle) -> Result<Vec<library::LocalRoot>, String> {
     Ok(roots)
 }
 
+/// Where extracted cover art is written.
+///
+/// Under the app's own cache directory rather than beside the music: the
+/// folders being read may be shared, and writing into them would put files on
+/// the network that the user never chose to put there.
+fn covers_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let base = handle
+        .path()
+        .app_cache_dir()
+        .map_err(|error| format!("Could not find a cache directory: {error}"))?;
+    Ok(base.join("covers"))
+}
+
+/// This machine's music as releases, with tags read and artwork extracted.
+///
+/// Separate from `local_library` because it opens every file: the plain
+/// listing stays cheap for the view that only needs names.
+#[tauri::command]
+fn local_albums(handle: AppHandle) -> Result<Vec<albums::Album>, String> {
+    let roots = local_library(handle.clone())?;
+    let covers = covers_dir(&handle)?;
+    let found = albums::gather(&roots, &covers);
+    // Written after the fact, so the scope covers what was just extracted.
+    let _ = handle
+        .asset_protocol_scope()
+        .allow_directory(&covers, false);
+    Ok(found)
+}
+
 /// Let the player read back the folders this machine already owns.
 ///
 /// The asset scope starts empty and is filled here rather than declared in
@@ -322,6 +352,11 @@ fn allow_reading_own_folders(handle: &AppHandle) {
     let _ = scope.allow_directory(&config.download_dir, true);
     for shared in &config.shared_dirs {
         let _ = scope.allow_directory(shared, true);
+    }
+    // Cover art lives outside those folders, so it needs saying separately.
+    if let Ok(covers) = covers_dir(handle) {
+        let _ = std::fs::create_dir_all(&covers);
+        let _ = scope.allow_directory(&covers, false);
     }
 }
 
@@ -371,6 +406,7 @@ pub fn run() {
             set_download_slots,
             downloaded_files,
             local_library,
+            local_albums,
         ])
         .run(tauri::generate_context!())
         .expect("starting the slsk.cat window");

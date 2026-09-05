@@ -3,6 +3,7 @@
   import { core, onEvent } from "./lib/core";
   import { app, AppState, fire } from "./lib/state.svelte";
   import * as session from "./lib/session";
+  import type { SearchHit } from "./lib/types";
   import type { Section } from "./lib/nav";
   import Sidebar from "./components/Sidebar.svelte";
   import Notices from "./components/Notices.svelte";
@@ -61,6 +62,12 @@
           .catch(() => {});
         for (const room of app.settings?.rooms ?? []) fire(core.joinRoom(room));
       }
+      // A wish that finds something can queue it, if that was asked for.
+      // Done here rather than in `apply`, which reduces events into state and
+      // does not issue commands.
+      if (event.type === "wishlistHits" && app.settings?.autoDownloadWishes) {
+        void autoQueue(event.data.query, event.data.hits);
+      }
       // A finished transfer is the one thing that changes what is on disk
       // while the app is running, so it is the only thing that re-reads it.
       if (event.type === "transferUpdated" && event.data.state.type === "completed") {
@@ -74,6 +81,42 @@
 
   /** Re-read the download folder. Failure is silent: not knowing what is on
       disk costs a hint, and is not worth a notice over. */
+  /**
+   * How many files one wish may queue by itself, per session.
+   *
+   * A wish is a specific thing someone asked for, but "aphex twin" is also a
+   * wish and the server will keep finding more of it. The cap is what stops an
+   * unattended queue from growing without end; the wish keeps collecting hits
+   * either way, and they are all still there to pick from by hand.
+   */
+  const AUTO_PER_WISH = 20;
+
+  /** Files this session queued on its own, so a re-run does not queue twice. */
+  const queued = new Map<string, Set<string>>();
+
+  async function autoQueue(query: string, hits: SearchHit[]) {
+    let mine = queued.get(query);
+    if (!mine) {
+      mine = new Set();
+      queued.set(query, mine);
+    }
+    for (const hit of hits) {
+      for (const file of hit.files) {
+        if (mine.size >= AUTO_PER_WISH) return;
+        const id = AppState.key(hit.username, file.path);
+        if (mine.has(id)) continue;
+        mine.add(id);
+        try {
+          await core.download(hit.username, file.path, file.size);
+        } catch (error) {
+          // One refusal should not stop the rest, and a wish queueing itself
+          // is background work: the transfer row carries the outcome.
+          console.error(error);
+        }
+      }
+    }
+  }
+
   async function refreshDownloaded() {
     try {
       const files = await core.downloadedFiles();

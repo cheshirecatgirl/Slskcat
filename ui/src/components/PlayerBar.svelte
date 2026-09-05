@@ -74,6 +74,7 @@
     <button
       class="loop"
       class:on={player.loop !== "off"}
+      class:folder={player.loop === "folder"}
       onclick={() => player.cycleLoop()}
       title={player.loop === "off"
         ? "Loop this track"
@@ -87,7 +88,6 @@
           d="M7 6h10v3l4-4-4-4v3H5v6h2V6Zm10 12H7v-3l-4 4 4 4v-3h12v-6h-2v4Z"
         />
       </svg>
-      {#if player.loop === "folder"}<span class="mode num">folder</span>{/if}
     </button>
 
     <button
@@ -216,7 +216,7 @@
     height: 30px;
     border-radius: 999px;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
     transition: background var(--fast);
   }
   .play:hover {
@@ -303,9 +303,10 @@
   .loop.on {
     color: var(--accent);
   }
-  .mode {
-    font-size: 10.5px;
-    letter-spacing: 0.02em;
+  /* Nothing is written beside it, so looping a folder has to look different
+     from looping a track. The tint says "on", the ring says "the folder". */
+  .loop.folder {
+    background: var(--accent-quiet);
   }
 
   .fx,

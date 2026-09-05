@@ -635,7 +635,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
     font-size: 11px;
     font-weight: 600;
     opacity: 0;

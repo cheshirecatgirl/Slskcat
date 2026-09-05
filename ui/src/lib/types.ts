@@ -129,6 +129,8 @@ export interface Settings {
   wishlist: string[];
   /** Interface scale as a percentage; 100 is the designed size. */
   uiScale: number;
+  /** Whether a wish that finds something queues it without being asked. */
+  autoDownloadWishes: boolean;
   /** Rooms to rejoin on sign-in. The server remembers none between sessions. */
   rooms: string[];
   /** People kept across sessions. Local only; the network has no such list. */
@@ -155,6 +157,30 @@ export interface Settings {
  */
 export const MAX_ACCOUNTS = 6;
 
+/** One track of a release, as `slskcat_app::albums::Track`. */
+export interface AlbumTrack {
+  path: string;
+  name: string;
+  size: number;
+  title: string | null;
+  artist: string | null;
+  number: number | null;
+  disc: number | null;
+  seconds: number | null;
+}
+
+/** A release, as `slskcat_app::albums::Album`. */
+export interface Album {
+  key: string;
+  title: string;
+  artist: string;
+  year: number | null;
+  /** Absolute path to a cover, which the asset protocol can read. */
+  cover: string | null;
+  downloads: boolean;
+  tracks: AlbumTrack[];
+}
+
 export function defaultSettings(): Settings {
   return {
     username: "",
@@ -168,6 +194,7 @@ export function defaultSettings(): Settings {
     searchTimeoutSecs: 12,
     wishlist: [],
     uiScale: 100,
+    autoDownloadWishes: false,
     rooms: [],
     friends: [],
     accounts: [],
@@ -201,6 +228,7 @@ export function hydrateSettings(raw: Partial<Settings> | null | undefined): Sett
     searchTimeoutSecs: from.searchTimeoutSecs ?? base.searchTimeoutSecs,
     wishlist: from.wishlist ?? base.wishlist,
     uiScale: from.uiScale ?? base.uiScale,
+    autoDownloadWishes: from.autoDownloadWishes ?? base.autoDownloadWishes,
     rooms: from.rooms ?? base.rooms,
     friends: from.friends ?? base.friends,
     accounts: from.accounts ?? base.accounts,

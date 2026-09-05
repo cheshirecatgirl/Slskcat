@@ -10,7 +10,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { hydrateSettings } from "./types";
-import type { CoreEvent, LocalRoot, SearchId, Settings, ShareVerdict } from "./types";
+import type { Album, CoreEvent, LocalRoot, SearchId, Settings, ShareVerdict } from "./types";
 
 /** Must match `slskcat_app::EVENT_CHANNEL`. */
 const EVENT_CHANNEL = "slskcat://event";
@@ -27,6 +27,8 @@ export const core = {
   loadSettings: () => invoke<Partial<Settings>>("load_settings").then(hydrateSettings),
   saveSettings: (settings: Settings) =>
     invoke<Partial<Settings>>("save_settings", { settings }).then(hydrateSettings),
+  /** This machine's music as releases. Opens every file, so it is not cheap. */
+  localAlbums: () => invoke<Album[]>("local_albums"),
   /** Record an account in the switcher. Only ever after it has signed in. */
   rememberAccount: (username: string) =>
     invoke<Partial<Settings>>("remember_account", { username }).then(hydrateSettings),

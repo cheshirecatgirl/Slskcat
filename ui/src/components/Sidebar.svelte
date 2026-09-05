@@ -287,7 +287,7 @@
   }
   .command .kbd:hover {
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
   }
 
   nav {
@@ -461,7 +461,7 @@
     height: 20px;
     border-radius: 999px;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-text);
     font-size: 10.5px;
     font-weight: 600;
   }
