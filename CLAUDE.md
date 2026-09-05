@@ -14,7 +14,7 @@ close most of that gap** — that is the job.
 
 ## What is already verified — do not redo
 
-- 89 Rust tests and 25 frontend tests, `cargo clippy` under
+- 90 Rust tests and 30 frontend tests, `cargo clippy` under
   pedantic-denied, `cargo fmt`, frontend
   typecheck. All green.
 - The credential-store round trip, against a real `gnome-keyring`.
@@ -94,6 +94,9 @@ own servers and needs no arguments:
 ```bash
 node ui/tools/audio-check.mjs
 ```
+
+`ui/tools/speed-probe.mjs` is the other half: it measures what time-stretching
+costs, which is how the "keep pitch" control got its wording.
 
 Silence is the failure that looks like success here — the track plays, the
 clock runs, nothing is heard — so it is worth running after any change to

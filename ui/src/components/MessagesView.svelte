@@ -402,8 +402,6 @@
   .star:focus-visible,
   .star.on {
     opacity: 1;
-  }
-  .star.on {
     color: var(--accent);
   }
 

@@ -12,7 +12,7 @@
   // Every control writes to the player's fields; this is the one place they
   // reach the element and the graph, so nothing has to remember to apply them.
   $effect(() => {
-    void [player.volume, player.speed, player.pitch, player.reverb];
+    void [player.volume, player.speed, player.pitch, player.reverb, player.keepPitch, player.loop];
     player.apply();
   });
 
@@ -34,7 +34,7 @@
     crossorigin="anonymous"
     ontimeupdate={() => (player.position = audio?.currentTime ?? 0)}
     onloadedmetadata={() => (player.duration = audio?.duration ?? 0)}
-    onended={() => (player.playing = false)}
+    onended={() => player.ended()}
     onpause={() => (player.playing = false)}
     onplay={() => (player.playing = true)}
   ></audio>
@@ -72,6 +72,25 @@
     <span class="num time">{of}</span>
 
     <button
+      class="loop"
+      class:on={player.loop !== "off"}
+      onclick={() => player.cycleLoop()}
+      title={player.loop === "off"
+        ? "Loop this track"
+        : player.loop === "track"
+          ? "Loop the folder"
+          : "Stop looping"}
+      aria-label="Loop"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M7 6h10v3l4-4-4-4v3H5v6h2V6Zm10 12H7v-3l-4 4 4 4v-3h12v-6h-2v4Z"
+        />
+      </svg>
+      {#if player.loop === "folder"}<span class="what num">folder</span>{/if}
+    </button>
+
+    <button
       class="fx"
       class:on={open}
       onclick={() => (open = !open)}
@@ -79,16 +98,19 @@
       aria-expanded={open}>FX</button
     >
 
-    <input
-      class="vol"
-      type="range"
-      min="0"
-      max="1"
-      step="0.01"
-      value={player.volume}
-      oninput={(event) => (player.volume = Number(event.currentTarget.value))}
-      aria-label="Volume"
-    />
+    <div class="volume">
+      <input
+        class="vol"
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={player.volume}
+        oninput={(event) => (player.volume = Number(event.currentTarget.value))}
+        aria-label="Volume"
+      />
+      <span class="num pct">{Math.round(player.volume * 100)}%</span>
+    </div>
 
     <button class="shut" onclick={() => player.stop()} title="Close" aria-label="Close player"
       >×</button
@@ -107,6 +129,16 @@
             oninput={(event) => (player.speed = Number(event.currentTarget.value))}
           />
         </label>
+
+        <label class="check">
+          <input type="checkbox" bind:checked={player.keepPitch} />
+          <span>Keep pitch while changing speed</span>
+        </label>
+        <p class="note">
+          {player.keepPitch
+            ? "Tempo alone, time-stretched. Past about 1.5x that starts to smear."
+            : "Pitch rises and falls with speed, the way a record does. Nothing is processed."}
+        </p>
 
         <label>
           <span>
@@ -234,6 +266,48 @@
     width: 84px;
   }
 
+  .volume {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  /* Wide enough for "100%" so the row does not shift as the number changes. */
+  .pct {
+    width: 34px;
+    font-size: 11.5px;
+    color: var(--text-3);
+    text-align: right;
+  }
+
+  .loop {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 7px;
+    border-radius: 6px;
+    color: var(--text-3);
+    transition: background var(--fast), color var(--fast);
+  }
+  .loop svg {
+    display: block;
+    width: 15px;
+    height: 15px;
+    fill: currentColor;
+  }
+  .loop:hover {
+    background: var(--surface-3);
+    color: var(--text-1);
+  }
+  .loop.on {
+    color: var(--accent);
+  }
+  .what {
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+  }
+
   .fx,
   .shut {
     flex: none;
@@ -244,15 +318,15 @@
     color: var(--text-3);
     transition: background var(--fast), color var(--fast);
   }
+  .shut {
+    font-size: 15px;
+    line-height: 1;
+  }
   .fx:hover,
   .shut:hover,
   .fx.on {
     background: var(--surface-3);
     color: var(--text-1);
-  }
-  .shut {
-    font-size: 15px;
-    line-height: 1;
   }
 
   /* Opens upward: the bar is already at the bottom of the window. */
@@ -278,6 +352,17 @@
   .panel label em {
     font-style: normal;
     color: var(--text-1);
+  }
+  /* The other labels stack a name over its slider; this one is a box and its
+     name, side by side. `display` has to be reset, not just the direction. */
+  .panel .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .panel .check input {
+    accent-color: var(--accent);
   }
   .reset {
     justify-self: start;

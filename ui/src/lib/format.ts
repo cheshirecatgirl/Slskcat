@@ -107,6 +107,20 @@ export const FORMAT_GROUPS: { label: string; formats: readonly string[] }[] = [
 const FORMATS = new Set(FORMAT_GROUPS.flatMap((group) => group.formats));
 
 /**
+ * Formats worth handing to a player: the three media groups.
+ *
+ * Video is in because a video file has an audio track, and playing that track
+ * is a reasonable thing to want from a music library. Whether a given platform
+ * has the decoder is the platform's business, and a file it refuses says so
+ * when it is asked rather than being hidden in advance.
+ */
+export const PLAYABLE = new Set(
+  FORMAT_GROUPS.filter((group) => ["Lossless", "Lossy", "Video"].includes(group.label)).flatMap(
+    (group) => group.formats,
+  ),
+);
+
+/**
  * The file's format, or `""` when its name does not end in one.
  *
  * Deliberately separate from [`extension`]: the raw tail is still the honest

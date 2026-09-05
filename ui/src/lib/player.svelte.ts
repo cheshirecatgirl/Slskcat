@@ -46,9 +46,32 @@ export class Player {
   /** Seconds. */
   position = $state(0);
   duration = $state(0);
-  volume = $state(0.9);
+  /** 0 to 1. Starts at the top: quieter than the source is the user's call. */
+  volume = $state(1);
+  /**
+   * What happens when a track ends.
+   *
+   * "track" is the element's own `loop`, which is seamless. "folder" needs the
+   * files either side of this one, which is why `play` takes a queue: the
+   * player has no idea what a folder is otherwise.
+   */
+  loop = $state<"off" | "track" | "folder">("off");
 
-  /** Tempo, 0.5 to 2. Does not touch the pitch. */
+  /**
+   * Whether the pitch stays put when the speed changes.
+   *
+   * On, the browser time-stretches. That is the only way to move tempo on its
+   * own, and it costs some smearing of transients: measured on a click train,
+   * transient peak survives well to about 1.5x and then falls off a cliff, to
+   * roughly half at 2x. Off, the element simply plays faster and the pitch
+   * rises with it, the way a record does. Nothing is processed, so there is
+   * nothing to smear.
+   *
+   * The pitch control is unaffected either way — that is the worklet's job,
+   * not the element's.
+   */
+  keepPitch = $state(true);
+  /** Tempo, 0.5 to 2. Does not touch the pitch while `keepPitch` is on. */
   speed = $state(1);
   /** Semitones, -12 to 12. Does not touch the tempo. */
   pitch = $state(0);
@@ -79,6 +102,8 @@ export class Player {
    * after a half-built graph throws and leaves the track silent.
    */
   #built = false;
+  /** The folder this track came from, in order, for looping across it. */
+  #queue: Track[] = [];
 
   /** Attach to the element once it exists. */
   attach(audio: HTMLAudioElement) {
@@ -137,8 +162,15 @@ export class Player {
     }
   }
 
-  async play(track: Track) {
-    if (!this.#audio) return;
+  /**
+   * Start a track. False if the platform could not decode it.
+   *
+   * `queue` is the other tracks it sits among, in the order they should play.
+   * Only folder looping uses it, and it defaults to the track alone.
+   */
+  async play(track: Track, queue: Track[] = [track]): Promise<boolean> {
+    if (!this.#audio) return false;
+    this.#queue = queue.length > 0 ? queue : [track];
     if (this.track?.path !== track.path) {
       this.track = track;
       this.position = 0;
@@ -150,11 +182,63 @@ export class Player {
     try {
       await this.#audio.play();
       this.playing = true;
+      return true;
     } catch {
-      // A format the platform cannot decode, or a file that moved. Neither is
-      // worth an exception reaching the interface.
+      // A format the platform cannot decode, or a file that moved. The caller
+      // knows which file it asked for and can say so.
       this.playing = false;
+      return false;
     }
+  }
+
+  /**
+   * The track finished on its own.
+   *
+   * Track looping never reaches here — the element repeats without ever
+   * ending — so this is folder looping, or the end of playback.
+   */
+  ended() {
+    const next = this.nextInFolder();
+    if (!next) {
+      this.playing = false;
+      return;
+    }
+    // A folder of one, looping: there is nothing to move to, and the element
+    // has already stopped, so it has to be sent round again by hand.
+    if (next.path === this.track?.path) {
+      this.seek(0);
+      void this.#audio?.play();
+      return;
+    }
+    void this.play(next, this.#queue);
+  }
+
+  /**
+   * Set the queue without playing anything.
+   *
+   * `play` is the only other way to fill it, and that needs a live `<audio>`.
+   */
+  queue(tracks: Track[]) {
+    this.#queue = tracks;
+  }
+
+  /**
+   * What follows the current track when the folder is looping, or null when
+   * nothing should follow it.
+   *
+   * Kept apart from `ended` so the decision can be checked on its own: the
+   * acting on it needs an element and a decoder, and the choosing does not.
+   */
+  nextInFolder(): Track | null {
+    if (this.loop !== "folder" || !this.track || this.#queue.length === 0) return null;
+    const at = this.#queue.findIndex((one) => one.path === this.track?.path);
+    return this.#queue[(at + 1) % this.#queue.length] ?? null;
+  }
+
+  /** Off, then the track, then the folder it came from. */
+  cycleLoop() {
+    this.loop = this.loop === "off" ? "track" : this.loop === "track" ? "folder" : "off";
+    this.apply();
   }
 
   toggle() {
@@ -172,6 +256,7 @@ export class Player {
     this.playing = false;
     this.track = null;
     this.position = 0;
+    this.#queue = [];
   }
 
   seek(seconds: number) {
@@ -186,9 +271,8 @@ export class Player {
     if (audio) {
       audio.volume = this.volume;
       audio.playbackRate = this.speed;
-      // Always on: pitch is its own control now, so the element's job is
-      // tempo and nothing else.
-      audio.preservesPitch = true;
+      audio.preservesPitch = this.keepPitch;
+      audio.loop = this.loop === "track";
     }
     if (this.#shifter) {
       // Twelve semitones to the octave, and an octave is a doubling.
@@ -200,11 +284,13 @@ export class Player {
       target?.cancelScheduledValues(now);
       target?.linearRampToValueAtTime(ratio, now + 0.05);
     }
-    if (this.#dry && this.#wet) {
+    if (this.#dry && this.#wet && this.#context) {
       // Equal-power rather than linear, so the middle of the control is not a
-      // dip in loudness.
-      this.#dry.gain.value = Math.cos((this.reverb * Math.PI) / 2);
-      this.#wet.gain.value = Math.sin((this.reverb * Math.PI) / 2);
+      // dip in loudness. Approached rather than assigned: writing `.value` is
+      // a step, and a slider under a finger writes sixty of them a second.
+      const now = this.#context.currentTime;
+      this.#dry.gain.setTargetAtTime(Math.cos((this.reverb * Math.PI) / 2), now, 0.015);
+      this.#wet.gain.setTargetAtTime(Math.sin((this.reverb * Math.PI) / 2), now, 0.015);
     }
   }
 }

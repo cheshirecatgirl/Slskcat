@@ -1,6 +1,8 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
   import * as session from "../lib/session";
+  import { MAX_ACCOUNTS } from "../lib/types";
+  import { dismiss } from "../lib/dismiss";
   import { core } from "../lib/core";
   import type { Section } from "../lib/nav";
 
@@ -20,8 +22,13 @@
    * settings file and come back if one is signed into again.
    */
   const others = $derived(
-    (app.settings?.accounts ?? []).filter((name) => name !== app.username).slice(0, 5),
+    (app.settings?.accounts ?? [])
+      .filter((name) => name !== app.username)
+      .slice(0, MAX_ACCOUNTS - 1),
   );
+
+  /** Whether there is room for one more. */
+  const roomToAdd = $derived((app.settings?.accounts ?? []).length < MAX_ACCOUNTS);
 
   async function switchTo(username: string) {
     switching = false;
@@ -56,27 +63,30 @@
   // and keeps the bundle free of a dependency that would dwarf them.
   const items: { id: Section; label: string; path: string }[] = [
     {
-      id: "explore",
-      label: "Explore",
-      path: "M11 4a7 7 0 1 0 4.2 12.6l3.6 3.6 1.4-1.4-3.6-3.6A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
-    },
-    {
       id: "discover",
       // Someone else's shelves rather than a folder of your own: a compass,
-      // hollow with the same two-unit wall as the rest of the set.
+      // hollow with the same two-unit wall as the rest of the set. The needle
+      // is a rhombus about the exact centre — the old one was two nested
+      // parallelograms whose hole sat below and left of the middle.
       label: "Discover",
-      path: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm4.6 3.4-2.4 5.6-5.6 2.4 2.4-5.6 5.6-2.4Zm-3.2 3.2-1.6.7-.7 1.6 1.6-.7.7-1.6Z",
+      path: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm3.4 4.6-2.3 4.5-4.5 2.3 2.3-4.5 4.5-2.3Z",
     },
     {
       id: "library",
       // Your own files: stacked spines.
       label: "Library",
-      path: "M4 3h4v18H4V3Zm2 2v14h.1V5H6Zm4-2h4v18h-4V3Zm2 2v14h.1V5H12Zm4.3-1.6 3.9 1 -4.5 17.4-3.9-1 4.5-17.4Zm1.4 2.5-3.5 13.6.1 0 3.5-13.6-.1 0Z",
+      // Two spines, not three. Three books in a 24-unit box leaves each of
+      // them five units wide, and a five-unit book with a two-unit wall has a
+      // one-unit hole: at 18px on screen it fills in and reads as a smudge.
+      path: "M4 4h7v16H4V4Zm2 2v12h3V6H6Zm7-3h7v17h-7V3Zm2 2v13h3V5h-3Z",
     },
     {
       id: "wishlist",
       label: "Wishlist",
-      path: "M12 21s-7.5-4.7-9.3-9A5.6 5.6 0 0 1 12 6.2 5.6 5.6 0 0 1 21.3 12c-1.8 4.3-9.3 9-9.3 9Zm0-2.5c2-1.4 5.6-4.2 7-7.3a3.6 3.6 0 0 0-6-2.6L12 9.7l-1-1.1a3.6 3.6 0 0 0-6 2.6c1.4 3.1 5 5.9 7 7.3Z",
+      // The wall was thinner across the two lobes than down the point,
+      // because the outer and inner curves were struck from different
+      // centres. Both are arcs of the same radius now, offset by two units.
+      path: "M12 20.7 3.9 13a5.1 5.1 0 0 1 7.2-7.2l.9.9.9-.9A5.1 5.1 0 0 1 20.1 13L12 20.7Zm0-2.8 6.7-6.4a3.1 3.1 0 0 0-4.4-4.4L12 9.4 9.7 7.1a3.1 3.1 0 0 0-4.4 4.4L12 17.9Z",
     },
     {
       id: "transfers",
@@ -96,7 +106,10 @@
     {
       id: "settings",
       label: "Settings",
-      path: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm-1.2-8h2.4l.4 2.3 2 .9 1.9-1.3 1.7 1.7-1.3 1.9.9 2 2.3.4v2.4l-2.3.4-.9 2 1.3 1.9-1.7 1.7-1.9-1.3-2 .9-.4 2.3h-2.4l-.4-2.3-2-.9-1.9 1.3-1.7-1.7 1.3-1.9-.9-2L2 13.2v-2.4l2.3-.4.9-2L3.9 6.5l1.7-1.7 1.9 1.3 2-.9L10.8 2Z",
+      // Eight teeth, every one the same width and the same angle apart,
+      // struck from one pair of radii about the centre. The old one was a
+      // hand-written polygon whose teeth were neither.
+      path: "M10 1.8L14 1.8L13.5 4.3L16.3 5.5L17.8 3.4L20.6 6.2L18.5 7.7L19.7 10.5L22.2 10L22.2 14L19.7 13.5L18.5 16.3L20.6 17.8L17.8 20.6L16.3 18.5L13.5 19.7L14 22.2L10 22.2L10.5 19.7L7.7 18.5L6.2 20.6L3.4 17.8L5.5 16.3L4.3 13.5L1.8 14L1.8 10L4.3 10.5L5.5 7.7L3.4 6.2L6.2 3.4L7.7 5.5L10.5 4.3ZM12 8.7a3.3 3.3 0 1 0 0 6.6a3.3 3.3 0 1 0 0-6.6Z",
     },
   ];
 </script>
@@ -109,16 +122,21 @@
     <span>slsk.cat</span>
   </div>
 
-  <!-- The command bar is the primary way in, so it sits above navigation. -->
-  <button class="command" onclick={onCommand}>
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M11 4a7 7 0 1 0 4.2 12.6l3.6 3.6 1.4-1.4-3.6-3.6A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
-      />
-    </svg>
-    <span>Search…</span>
-    <span class="kbd">⌘K</span>
-  </button>
+  <!-- Search is the section and the way into it, in one row. A separate
+       "Explore" below this said the same thing twice. -->
+  <div class="command" class:active={section === "explore"}>
+    <button class="go" onclick={() => (section = "explore")}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M11 4a7 7 0 1 0 4.2 12.6l3.6 3.6 1.4-1.4-3.6-3.6A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
+        />
+      </svg>
+      <span>Search…</span>
+    </button>
+    <button class="kbd" onclick={onCommand} title="Command bar" aria-label="Open the command bar">
+      ⌘K
+    </button>
+  </div>
 
   <nav>
     {#each items as item (item.id)}
@@ -136,7 +154,7 @@
     {/each}
   </nav>
 
-  <div class="foot">
+  <div class="foot" use:dismiss={() => (switching = false)}>
     {#if switching}
       <!-- Anchored above the identity row, the way an account menu sits above
            the person it belongs to. -->
@@ -156,7 +174,13 @@
             >
           </div>
         {/each}
-        <button class="add" role="menuitem" onclick={addAccount}>Add another account</button>
+        {#if roomToAdd}
+          <button class="add" role="menuitem" onclick={addAccount}>Add another account</button>
+        {:else}
+          <!-- Offering to add one here would have quietly pushed the oldest
+               name off the end of the list instead. -->
+          <p class="full">{MAX_ACCOUNTS} accounts is the limit. Forget one to add another.</p>
+        {/if}
       </div>
     {/if}
 
@@ -225,22 +249,37 @@
   .command {
     display: flex;
     align-items: center;
-    gap: 8px;
     width: 100%;
-    padding: 7px 9px;
+    padding: 0 9px 0 0;
     margin-bottom: 14px;
     border-radius: var(--radius);
     background: #ffffff0f;
     color: var(--text-2);
     font-size: 12.5px;
-    text-align: left;
-    transition: background var(--fast), transform var(--fast);
+    transition: background var(--fast);
   }
   .command:hover {
     background: #ffffff1a;
     color: var(--text);
   }
-  .command:active {
+  .command.active {
+    background: var(--accent-quiet);
+    color: var(--accent);
+  }
+  /* The row is the section; the chip beside it is the command bar. Two
+     targets, because a button cannot hold another one. */
+  .command .go {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 7px 0 7px 9px;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  .command .go:active {
     transform: scale(0.98);
   }
   .command svg {
@@ -250,8 +289,13 @@
     fill: currentColor;
     opacity: 0.7;
   }
-  .command span:not(.kbd) {
-    flex: 1;
+  .command .kbd {
+    flex: none;
+    transition: background var(--fast), color var(--fast);
+  }
+  .command .kbd:hover {
+    background: var(--accent);
+    color: #fff;
   }
 
   nav {
@@ -370,7 +414,17 @@
 
   /* The account menu. Sits above the identity row rather than below it,
      because the row is already at the bottom of the window. */
+  .full {
+    padding: 6px 9px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--text-3);
+  }
   .accounts {
+    /* The name below carries a negative margin so its text lines up with the
+       navigation, and the pane has to start where that box does or it looks
+       inset on the left and flush on the right. */
+    margin-left: -5px;
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -471,7 +525,7 @@
     fill: currentColor;
   }
   .shares {
-    padding-left: 14px;
+    /* Lines up with the username above it, which sits at the foot's own edge. */
     font-size: 11px;
     color: var(--text-3);
   }

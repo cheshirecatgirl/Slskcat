@@ -4,33 +4,13 @@
   import { core } from "../lib/core";
   import { app } from "../lib/state.svelte";
   import { player, trackOf } from "../lib/player.svelte";
-  import { bytes, format } from "../lib/format";
+  import { bytes, format, PLAYABLE } from "../lib/format";
   import type { LocalFile, LocalRoot } from "../lib/types";
 
   let roots = $state<LocalRoot[]>([]);
   let loading = $state(true);
   let filter = $state("");
   let closed = $state<Record<string, true>>({});
-
-  /**
-   * Formats worth handing to a player.
-   *
-   * A library lists everything in the folder, cue sheets and logs and artwork
-   * included, because it is a view of what is there. Only these get a play
-   * control.
-   */
-  const PLAYABLE = new Set([
-    "flac",
-    "mp3",
-    "m4a",
-    "aac",
-    "ogg",
-    "oga",
-    "opus",
-    "wav",
-    "aiff",
-    "aif",
-  ]);
 
   async function reload() {
     try {
@@ -55,12 +35,15 @@
     const needle = filter.trim().toLowerCase();
     const out: Group[] = [];
     for (const root of roots) {
+      // Only media. A shared folder holds cue sheets, logs and artwork too,
+      // and a library that lists those is a file manager.
+      const playable = root.files.filter((file) => PLAYABLE.has(format(file.name)));
       const matched = needle
-        ? root.files.filter(
+        ? playable.filter(
             (file) =>
               file.name.toLowerCase().includes(needle) || file.folder.toLowerCase().includes(needle),
           )
-        : root.files;
+        : playable;
       const byFolder = new Map<string, LocalFile[]>();
       for (const file of matched) {
         const existing = byFolder.get(file.folder);
@@ -74,7 +57,12 @@
     return out;
   });
 
-  const counted = $derived(roots.reduce((total, root) => total + root.files.length, 0));
+  const counted = $derived(
+    roots.reduce(
+      (total, root) => total + root.files.filter((file) => PLAYABLE.has(format(file.name))).length,
+      0,
+    ),
+  );
 
   function toggle(key: string) {
     if (closed[key]) {
@@ -85,13 +73,20 @@
     }
   }
 
-  function play(file: LocalFile, root: LocalRoot) {
+  async function play(file: LocalFile, root: LocalRoot, folder: LocalFile[]) {
     // `convertFileSrc` turns a path into something an `<audio>` element will
     // load; the webview cannot open a file by name. It resolves only inside
     // the scope the app grants at startup, which is exactly these folders.
-    void player.play(
-      trackOf(file.path, convertFileSrc(file.path), root.downloads ? "downloads" : "shared"),
+    const from = root.downloads ? "downloads" : "shared";
+    // The whole folder goes with it, in the order it is listed, so looping
+    // the folder plays what is on screen rather than some other order.
+    const played = await player.play(
+      trackOf(file.path, convertFileSrc(file.path), from),
+      folder.map((one) => trackOf(one.path, convertFileSrc(one.path), from)),
     );
+    // A media file this platform has no decoder for. Saying so beats a play
+    // button that appears to do nothing.
+    if (!played) app.notify(`Could not play ${file.name}.`, "danger");
   }
 </script>
 
@@ -111,7 +106,7 @@
     <div class="empty">
       <h3>{counted === 0 ? "Nothing here yet" : "No matches"}</h3>
       {#if counted === 0}
-        <p>Finished downloads and the folders you share both appear here.</p>
+        <p>Music from your downloads and the folders you share appears here.</p>
       {/if}
     </div>
   {:else}
@@ -133,16 +128,12 @@
             <div class="files">
               {#each group.files as file (file.path)}
                 <div class="file" class:current={player.track?.path === file.path}>
-                  {#if PLAYABLE.has(format(file.name))}
-                    <button
-                      class="go"
-                      onclick={() => play(file, group.root)}
-                      title="Play {file.name}"
-                      aria-label="Play {file.name}">&#9654;</button
-                    >
-                  {:else}
-                    <span class="go blank" aria-hidden="true"></span>
-                  {/if}
+                  <button
+                    class="go"
+                    onclick={() => play(file, group.root, group.files)}
+                    title="Play {file.name}"
+                    aria-label="Play {file.name}">&#9654;</button
+                  >
                   <span class="fname selectable">{file.name}</span>
                   <span class="meta kind">{format(file.name).toUpperCase()}</span>
                   <span class="meta num">{bytes(file.size)}</span>
@@ -256,10 +247,7 @@
     color: var(--text-3);
     transition: background var(--fast), color var(--fast);
   }
-  .go.blank {
-    pointer-events: none;
-  }
-  .file:hover .go:not(.blank) {
+  .file:hover .go {
     background: var(--accent);
     color: #fff;
   }

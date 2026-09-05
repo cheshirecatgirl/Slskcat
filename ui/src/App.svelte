@@ -140,11 +140,11 @@
     />
   {/if}
 
-  <!-- Outside the canvas, so what is playing survives moving between
-       sections and stays put at the bottom of the window. -->
-  {#if app.connected && !app.addingAccount}
-    <PlayerBar />
-  {/if}
+  <!-- Outside the canvas, and never behind a condition. What is playing has
+       nothing to do with being signed in, and unmounting the bar destroys the
+       element the audio graph is built on: signing in again, or reconnecting
+       through a proxy, used to cut the track off mid-song. -->
+  <PlayerBar />
 
   <Notices />
 </div>
@@ -166,6 +166,12 @@
   .window:has(.canvas.solo) {
     grid-template-columns: minmax(0, 1fr);
     padding: var(--gap);
+  }
+  /* The bar carries its own left margin because the sidebar normally sits
+     flush against the window edge. With no sidebar the window pads both
+     sides, and the two would add up. */
+  .window:has(.canvas.solo) :global(.bar) {
+    margin-left: 0;
   }
 
   /*

@@ -110,6 +110,14 @@ impl Default for Settings {
     }
 }
 
+/// How many accounts this machine will keep.
+///
+/// The switcher is for the handful of names someone actually uses; past that
+/// it is a list to search rather than a menu to point at. The interface holds
+/// the same number in `MAX_ACCOUNTS` and stops offering to add another once it
+/// is reached, so this cap is the backstop rather than the usual path to it.
+pub const MAX_ACCOUNTS: usize = 6;
+
 impl Settings {
     /// Record the current account as the most recently used one.
     ///
@@ -123,6 +131,10 @@ impl Settings {
         }
         self.accounts.retain(|name| name != &self.username);
         self.accounts.insert(0, self.username.clone());
+        // Least recently signed into is the one to lose. Only the name goes:
+        // the password stays in the credential store under it, so signing in
+        // again brings the account straight back.
+        self.accounts.truncate(MAX_ACCOUNTS);
     }
 
     /// The same settings with nothing secret and nothing transient in them,
@@ -526,6 +538,21 @@ mod tests {
         // and re-saving the same account must not grow it.
         settings.remember_account();
         assert_eq!(settings.accounts, vec!["second", "first"]);
+    }
+
+    #[test]
+    fn the_account_list_stops_at_the_cap_and_drops_the_oldest() {
+        let mut settings = Settings::default();
+        for n in 0..MAX_ACCOUNTS + 3 {
+            settings.username = format!("name{n}");
+            settings.remember_account();
+        }
+        assert_eq!(settings.accounts.len(), MAX_ACCOUNTS);
+        assert_eq!(settings.accounts[0], format!("name{}", MAX_ACCOUNTS + 2));
+        assert!(
+            !settings.accounts.contains(&"name0".to_string()),
+            "the least recently used name is the one to lose"
+        );
     }
 
     #[test]

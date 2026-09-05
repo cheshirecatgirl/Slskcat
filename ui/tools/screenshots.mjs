@@ -324,7 +324,10 @@ const run = async () => {
     // controls are what this shot is for.
     await page.click('.file:has-text("01 Xtal.flac") .go');
     await page.waitForTimeout(300);
-    await page.click('.fx');
+    // Two presses: the track, then the folder it came from.
+    await page.click(".loop");
+    await page.click(".loop");
+    await page.click(".fx");
     await page.waitForTimeout(400);
     await shot("4e-player");
     await page.click('.fx');

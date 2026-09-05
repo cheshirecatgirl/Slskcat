@@ -145,6 +145,16 @@ export interface Settings {
  * every time `Settings` gains a field, and the compiler only catches it where
  * the literal happens to be assigned to the full type.
  */
+/**
+ * How many accounts this machine will keep, matching `MAX_ACCOUNTS` in
+ * `slskcat_app::settings`.
+ *
+ * The switcher stops offering to add another at this point. The backend caps
+ * the list too, so exceeding it would silently drop the oldest name rather
+ * than fail, which is not something to let happen by surprise.
+ */
+export const MAX_ACCOUNTS = 6;
+
 export function defaultSettings(): Settings {
   return {
     username: "",

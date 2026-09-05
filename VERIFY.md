@@ -179,7 +179,7 @@ so far. Everything else compiles but has never been packaged.
 
 ## Already verified — don't redo these
 
-- 89 Rust tests and 25 frontend tests, clippy under pedantic-denied, fmt,
+- 90 Rust tests and 30 frontend tests, clippy under pedantic-denied, fmt,
   frontend typecheck
 - The credential store round trip, against a real `gnome-keyring`
 - The share guard, including a symlinked root pointing into a refused location

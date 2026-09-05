@@ -1,5 +1,6 @@
 <script lang="ts">
   import { core } from "../lib/core";
+  import { dismiss } from "../lib/dismiss";
   import { app, AppState, fire, isLiveTransfer, type ResultRow } from "../lib/state.svelte";
   import {
     bitrate,
@@ -25,10 +26,14 @@
   let closed = $state<Record<string, true>>({});
 
   /**
-   * Row heights. A peer heads a section and a folder groups one, so both are
-   * given the weight to be found while scrolling past; a file is a file.
+   * Row heights, 1.25x and 1.125x of a file row.
+   *
+   * A peer heads a section and a folder groups one, so both are given enough
+   * weight to be found while scrolling past. The text in them is scaled by the
+   * same two ratios, in the stylesheet: a tall row with baseline text in it is
+   * just a gap.
    */
-  const HEIGHT = { user: 68, folder: 51, file: 34 } as const;
+  const HEIGHT = { user: 42, folder: 38, file: 34 } as const;
   /** Rows rendered beyond the viewport, so fast scrolling never shows gaps. */
   const OVERSCAN = 6;
 
@@ -370,7 +375,7 @@
       <input class="field slim" bind:value={filter} placeholder="Filter these results…" />
       <!-- A menu rather than a select: picking three formats out of a select
            means opening it three times, because it closes on every choice. -->
-      <div class="picker">
+      <div class="picker" use:dismiss={() => (formatsOpen = false)}>
         <button
           class="field slim auto"
           class:on={formatsOpen}
@@ -536,34 +541,30 @@
     padding: 0 14px;
     text-align: left;
   }
+  /* One hierarchy, applied to both the row and the text in it: a file is the
+     baseline, a folder groups files at 1.125x, a peer heads folders at 1.25x.
+     Anything more than that leaves the taller rows mostly empty. */
   .tuser {
     gap: 8px;
-    height: 68px;
+    height: 42px;
     padding: 0 14px;
     background: var(--surface-2);
     font-weight: 500;
   }
-  /* Text scales with the row it sits in: a file is the baseline, a folder
-     groups files, a peer heads folders. Same ratios as the heights. */
   .tuser .uname {
     font-size: 15.6px;
-  }
-  .tfolder {
-    height: 51px;
-  }
-  .tfolder .fold {
-    font-size: 14.1px;
   }
   .tuser:hover {
     background: var(--surface-3);
   }
-  .tuser .uname {
-    font-size: 12.5px;
-  }
 
   .tfolder {
+    height: 38px;
     padding-right: 10px;
     padding-left: 26px;
+  }
+  .tfolder .fold {
+    font-size: 14.1px;
   }
   .tfolder:hover,
   .tfile:hover {
