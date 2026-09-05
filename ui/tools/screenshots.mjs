@@ -372,14 +372,14 @@ const run = async () => {
     await page.waitForTimeout(400);
     await shot("4c-discover");
 
-    // 4d. Library: this machine's own folders, with the player running
+    // 4d. Library: this machine's own music, song by song
     await page.click('button:has-text("Library")');
     await page.waitForTimeout(300);
     await page.click('.segbtn:has-text("My list")');
     await page.waitForTimeout(400);
-    await shot("4d-library");
+    await shot("4d-songs");
 
-    // 4d2. The same library as releases, from tags and embedded artwork.
+    // 4d2. The same library as releases, from the same tags.
     await page.click('.shapebtn[aria-label="As releases"]');
     await page.waitForTimeout(500);
     await shot("4d2-albums");
@@ -388,13 +388,13 @@ const run = async () => {
     await shot("4d3-album");
     await page.click(".back");
     await page.waitForTimeout(300);
-    await page.click('.shapebtn[aria-label="As files"]');
+    await page.click('.shapebtn[aria-label="As songs"]');
     await page.waitForTimeout(300);
 
     // 4e. The player bar, with its effects panel open. The mocked bridge has
     // no real file behind the path, so playback itself fails — the bar and its
     // controls are what this shot is for.
-    await page.click('.file:has-text("01 Xtal.flac") .go');
+    await page.click('.song:has-text("Xtal")');
     await page.waitForTimeout(300);
     // Two presses: the track, then the folder it came from.
     await page.click(".loop");

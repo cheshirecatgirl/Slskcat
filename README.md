@@ -133,10 +133,11 @@ chrome.
 - ⌘K opens the command bar. It is search-first: type anything and the top
   action runs it against the network.
 - Library is what you have and what you are waiting for, in two tabs. My list
-  is the files on this machine, shown either as folders or as the releases they
-  make up — that view reads tags and embedded artwork, and falls back to the
-  folder name when a file has neither. The wishlist is standing searches the
-  server re-runs on the interval it dictates, and it can queue what it finds.
+  is the music on this machine, as songs or as the releases they belong to —
+  one scan of the tags feeds both, with embedded artwork where there is any and
+  the folder name as the fallback where there are no tags at all. The wishlist
+  is standing searches the server re-runs on the interval it dictates, and it
+  can queue what it finds.
 - Transfers are two tabs, downloads and uploads, given equal weight — uploads
   are what other people see of you. Upload rows fill from the right, so
   direction reads before the text does.

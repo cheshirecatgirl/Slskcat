@@ -1,7 +1,6 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
-  import AlbumsView from "./AlbumsView.svelte";
-  import LocalFilesView from "./LocalFilesView.svelte";
+  import MusicView from "./MusicView.svelte";
   import WishlistView from "./WishlistView.svelte";
 
   /**
@@ -13,11 +12,10 @@
    */
   let side = $state<"files" | "wishes">("files");
   /**
-   * How the files are shown: as a folder listing, or as the releases they
-   * make up. Two ways of looking at one thing, so it is a toggle beside the
-   * list rather than a third tab.
+   * Songs or the releases they belong to. One scan, two ways of reading it,
+   * so it is a toggle beside the list rather than a third tab.
    */
-  let shape = $state<"list" | "albums">("list");
+  let shape = $state<"songs" | "albums">("songs");
 
   const waiting = $derived(app.settings?.wishlist.length ?? 0);
 </script>
@@ -50,11 +48,11 @@
       <div class="shape" role="group" aria-label="How to show them">
         <button
           class="shapebtn"
-          class:on={shape === "list"}
-          onclick={() => (shape = "list")}
-          title="As files"
-          aria-label="As files"
-          aria-pressed={shape === "list"}
+          class:on={shape === "songs"}
+          onclick={() => (shape = "songs")}
+          title="As songs"
+          aria-label="As songs"
+          aria-pressed={shape === "songs"}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 5h2v2H4V5Zm4 0h12v2H8V5ZM4 11h2v2H4v-2Zm4 0h12v2H8v-2Zm-4 6h2v2H4v-2Zm4 0h12v2H8v-2Z" />
@@ -81,10 +79,8 @@
   <div class="body" role="tabpanel">
     {#if side === "wishes"}
       <WishlistView />
-    {:else if shape === "albums"}
-      <AlbumsView />
     {:else}
-      <LocalFilesView />
+      <MusicView {shape} />
     {/if}
   </div>
 </div>

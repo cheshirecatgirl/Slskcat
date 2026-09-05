@@ -92,7 +92,8 @@ Click through, in this order:
 ☐ Sign in — check **Remember password**
 ☐ Search something — results stream in, columns line up
 ☐ Press **⌘K** / **Ctrl-K** — palette opens, typing offers to search
-☐ **Library → My list** — media only; the grid icon shows releases with covers
+☐ **Library → My list** — songs with covers and tags; the grid icon shows the
+  same music as releases, and one opens to its tracks
 ☐ **Library → Wishlist** — add a wish, it appears
 ☐ **Transfers** — both tabs render
 ☐ **Rooms** — join one, send a line

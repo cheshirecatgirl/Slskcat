@@ -286,10 +286,13 @@ fn downloaded_files(handle: AppHandle) -> Result<Vec<library::Downloaded>, Strin
     Ok(library::scan(&settings.to_config().download_dir))
 }
 
-/// This machine's own folders — where downloads land, and everything shared.
-#[tauri::command]
-fn local_library(handle: AppHandle) -> Result<Vec<library::LocalRoot>, String> {
-    let config = settings::load(&handle)?.to_config();
+/// This machine's own folders: where downloads land, and everything shared.
+///
+/// Not a command. The interface asked for this directly while it had a folder
+/// listing to fill; it shows songs and releases now, and both of those come
+/// from `local_albums`, which is the only caller left.
+fn local_library(handle: &AppHandle) -> Result<Vec<library::LocalRoot>, String> {
+    let config = settings::load(handle)?.to_config();
     let mut roots = vec![library::list(&config.download_dir, true)];
     for shared in &config.shared_dirs {
         // A folder that is both shared and where downloads land is one place,
@@ -321,7 +324,7 @@ fn covers_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
 /// listing stays cheap for the view that only needs names.
 #[tauri::command]
 fn local_albums(handle: AppHandle) -> Result<Vec<albums::Album>, String> {
-    let roots = local_library(handle.clone())?;
+    let roots = local_library(&handle)?;
     let covers = covers_dir(&handle)?;
     let found = albums::gather(&roots, &covers);
     // Written after the fact, so the scope covers what was just extracted.
@@ -405,7 +408,6 @@ pub fn run() {
             set_upload_slots,
             set_download_slots,
             downloaded_files,
-            local_library,
             local_albums,
         ])
         .run(tauri::generate_context!())
